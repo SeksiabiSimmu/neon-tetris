@@ -46,4 +46,3 @@ Keys can be rebound in Settings. The game also offers colorblind-friendly colors
 ## Quality checks
 
 `pnpm test` runs gameplay, progression, settings, rendering, and entry-point checks. `pnpm build` verifies the browser bundle.
-

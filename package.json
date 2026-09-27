@@ -1,0 +1,36 @@
+{
+  "name": "neon-tetris",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "desktop/main.cjs",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "vite build",
+    "preview": "vite preview --host 127.0.0.1",
+    "test": "node --test",
+    "desktop": "electron .",
+    "build:win": "vite build && electron-builder --win portable --x64"
+  },
+  "dependencies": {
+    "@fontsource/chakra-petch": "^5.3.0",
+    "three": "^0.186.1"
+  },
+  "devDependencies": {
+    "vite": "^8.3.1",
+    "electron": "44.4.5",
+    "electron-builder": "26.15.3"
+  },
+  "build": {
+    "appId": "com.neontetris.game",
+    "productName": "Neon Tetris",
+    "directories": { "output": "release" },
+    "files": ["dist/**/*", "desktop/main.cjs", "assets/icon.ico", "package.json"],
+    "asar": true,
+    "win": {
+      "target": "portable",
+      "icon": "assets/icon.ico",
+      "artifactName": "NeonTetris-${version}-win-x64.${ext}"
+    }
+  }
+}

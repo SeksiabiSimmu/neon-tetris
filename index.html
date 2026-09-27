@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tetris</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <canvas id="bg-canvas"></canvas>
+  <canvas id="scene-canvas" aria-hidden="true"></canvas>
+
+  <div class="game-wrap">
+    <header>
+      <h1 class="game-title">TETRIS</h1>
+    </header>
+
+    <div class="game-layout">
+      <aside class="side-panel side-panel--left">
+        <section class="panel preview-panel">
+          <h2 class="panel-label">Hold</h2>
+          <canvas id="hold-canvas" width="120" height="100"></canvas>
+        </section>
+        <button id="pause-button" class="btn btn--ghost" type="button">Pause</button>
+        <button id="restart-button" class="btn btn--ghost" type="button">Restart</button>
+        <button id="menu-button" class="btn btn--ghost" type="button">Menu</button>
+      </aside>
+
+      <div class="board-frame">
+        <canvas id="board-canvas" width="300" height="600"></canvas>
+
+        <div class="hud-badges">
+          <span id="combo-badge" class="hud-badge hud-badge--combo"></span>
+          <span id="b2b-badge" class="hud-badge hud-badge--b2b">Back-to-Back</span>
+        </div>
+        <div id="clear-callout" class="clear-callout"></div>
+        <div id="level-up-callout" class="level-up-callout"></div>
+
+        <div id="pause-overlay" class="overlay" role="dialog" aria-modal="true" aria-labelledby="pause-title">
+          <p id="pause-title" class="overlay-title">Paused</p>
+          <div class="overlay-actions">
+            <button id="resume-button" class="btn btn--primary" type="button">Resume</button>
+            <button id="pause-restart-button" class="btn btn--ghost" type="button">Restart</button>
+            <button id="pause-settings-button" class="btn btn--ghost" type="button">Settings</button>
+            <button id="pause-menu-button" class="btn btn--ghost" type="button">Quit to Menu</button>
+          </div>
+        </div>
+
+        <div id="game-over-overlay" class="overlay" role="dialog" aria-modal="true" aria-labelledby="game-over-title">
+          <p id="game-over-title" class="overlay-title">Game Over</p>
+          <p id="game-over-reason" class="overlay-subtitle"></p>
+          <div id="record-banner" class="record-banner">New Record!</div>
+          <div class="game-over-stats">
+            <div><span class="go-label">Score</span><span id="final-score-value" class="go-value">0</span></div>
+            <div><span class="go-label">Level</span><span id="final-level-value" class="go-value">1</span></div>
+            <div><span class="go-label">Lines</span><span id="final-lines-value" class="go-value">0</span></div>
+            <div><span class="go-label">XP Earned</span><span id="final-xp-value" class="go-value">+0</span></div>
+          </div>
+          <p id="final-best-comparison" class="overlay-subtitle"></p>
+          <div id="final-achievements" class="final-achievements"></div>
+          <div class="overlay-actions">
+            <button id="restart-button-gameover" class="btn btn--primary" type="button">Retry</button>
+            <button id="gameover-menu-button" class="btn btn--ghost" type="button">Menu</button>
+          </div>
+        </div>
+      </div>
+
+      <aside class="side-panel side-panel--right">
+        <section class="panel">
+          <h2 class="panel-label">Score</h2>
+          <p id="score-value" class="stat-value">0</p>
+        </section>
+        <section class="panel panel--row">
+          <div>
+            <h2 class="panel-label">Level</h2>
+            <p id="level-value" class="stat-value stat-value--small">1</p>
+          </div>
+          <div>
+            <h2 class="panel-label">Lines</h2>
+            <p id="lines-value" class="stat-value stat-value--small">0</p>
+          </div>
+        </section>
+        <section id="hud-mode-panel" class="panel hud-mode-panel">
+          <div id="hud-mode-timer-row" class="hud-mode-row">
+            <h2 class="panel-label">Time</h2>
+            <p id="hud-mode-timer" class="stat-value stat-value--small">0:00</p>
+          </div>
+          <div id="hud-mode-lines-row" class="hud-mode-row">
+            <h2 class="panel-label">Lines Left</h2>
+            <p id="hud-mode-lines-remaining" class="stat-value stat-value--small">40</p>
+          </div>
+          <div id="hud-mode-objective-row" class="hud-mode-row">
+            <h2 class="panel-label">Objective</h2>
+            <p id="hud-mode-objective" class="hud-objective-text"></p>
+          </div>
+        </section>
+        <section class="panel preview-panel">
+          <h2 class="panel-label">Next</h2>
+          <canvas id="next-canvas" width="120" height="300"></canvas>
+        </section>
+        <section class="panel hud-xp-panel">
+          <h2 class="panel-label">Player Lv <span id="hud-player-level">1</span></h2>
+          <div class="xp-bar"><div id="hud-xp-fill" class="xp-bar__fill"></div></div>
+        </section>
+      </aside>
+    </div>
+
+    <pre id="debug-panel" class="debug-panel"></pre>
+
+    <footer class="controls-hint">
+      <span class="hint"><kbd>&larr;</kbd><kbd>&rarr;</kbd> Move</span>
+      <span class="hint"><kbd>&darr;</kbd> Soft drop</span>
+      <span class="hint"><kbd>Space</kbd> Hard drop</span>
+      <span class="hint"><kbd>&uarr;</kbd> Rotate</span>
+      <span class="hint"><kbd>Z</kbd> Rotate back</span>
+      <span class="hint"><kbd>C</kbd> Hold</span>
+      <span class="hint"><kbd>R</kbd> Restart</span>
+      <span class="hint"><kbd>Esc</kbd> Pause / menu back</span>
+    </footer>
+  </div>
+
+  <div id="achievement-toast" class="achievement-toast"></div>
+
+  <div id="screen-root">
+    <section id="screen-main-menu" class="screen screen--menu">
+      <div class="menu-card">
+        <h1 class="menu-title">TETRIS</h1>
+        <p class="menu-subtitle">Player Level <span id="menu-player-level">1</span></p>
+
+        <div class="menu-section">
+          <button id="menu-play-button" class="menu-play-btn" type="button">Play</button>
+          <button id="menu-resume-button" class="menu-resume-btn" type="button">Resume Game</button>
+        </div>
+
+        <nav class="menu-nav">
+          <button class="menu-nav__btn" data-screen="progression">Progression</button>
+          <button class="menu-nav__btn" data-screen="achievements">Achievements</button>
+          <button class="menu-nav__btn" data-screen="statistics">Statistics</button>
+          <button class="menu-nav__btn" data-screen="customization">Customization</button>
+          <button class="menu-nav__btn" data-screen="settings">Settings</button>
+        </nav>
+      </div>
+    </section>
+
+    <section id="screen-mode-select" class="screen">
+      <div class="screen-panel">
+        <header class="screen-header">
+          <h1>Select Mode</h1>
+          <button class="btn btn--ghost screen-back" data-back="main-menu">Back</button>
+        </header>
+        <div id="mode-select-grid" class="mode-select-grid"></div>
+      </div>
+    </section>
+
+    <section id="screen-progression" class="screen">
+      <div class="screen-panel">
+        <header class="screen-header">
+          <h1>Progression</h1>
+          <button class="btn btn--ghost screen-back" data-back="main-menu">Back</button>
+        </header>
+        <div class="progression-hero">
+          <div class="progression-hero__level">Lv <span id="prog-level">1</span></div>
+          <div class="xp-bar xp-bar--large"><div id="prog-xp-fill" class="xp-bar__fill"></div></div>
+          <p id="prog-xp-label" class="progression-hero__xp-label">0 / 100 XP</p>
+        </div>
+        <div class="screen-columns">
+          <div>
+            <h2 class="screen-subheading">Recently Unlocked</h2>
+            <ul id="prog-recent-list" class="simple-list"></ul>
+          </div>
+          <div>
+            <h2 class="screen-subheading">Upcoming Rewards</h2>
+            <ul id="prog-upcoming-list" class="simple-list"></ul>
+          </div>
+        </div>
+        <h2 class="screen-subheading">Unlock Timeline</h2>
+        <ol id="prog-timeline" class="unlock-timeline"></ol>
+      </div>
+    </section>
+
+    <section id="screen-achievements" class="screen">
+      <div class="screen-panel">
+        <header class="screen-header">
+          <h1>Achievements</h1>
+          <button class="btn btn--ghost screen-back" data-back="main-menu">Back</button>
+        </header>
+        <p id="achievements-summary" class="screen-summary"></p>
+        <div id="achievements-grid" class="achievements-grid"></div>
+      </div>
+    </section>
+
+    <section id="screen-statistics" class="screen">
+      <div class="screen-panel">
+        <header class="screen-header">
+          <h1>Statistics</h1>
+          <button class="btn btn--ghost screen-back" data-back="main-menu">Back</button>
+        </header>
+        <div class="screen-columns">
+          <div>
+            <h2 class="screen-subheading">Lifetime</h2>
+            <dl id="stats-lifetime" class="stat-grid"></dl>
+          </div>
+          <div>
+            <h2 class="screen-subheading">This Session</h2>
+            <dl id="stats-session" class="stat-grid"></dl>
+          </div>
+        </div>
+        <h2 class="screen-subheading">Highlights</h2>
+        <ul id="stats-highlights" class="simple-list"></ul>
+      </div>
+    </section>
+
+    <section id="screen-customization" class="screen">
+      <div class="screen-panel">
+        <header class="screen-header">
+          <h1>Customization</h1>
+          <button class="btn btn--ghost screen-back" data-back="main-menu">Back</button>
+        </header>
+        <div id="customization-categories" class="customization-categories"></div>
+      </div>
+    </section>
+
+    <section id="screen-settings" class="screen">
+      <div class="screen-panel">
+        <header class="screen-header">
+          <h1>Settings</h1>
+          <button class="btn btn--ghost screen-back" data-back="main-menu">Back</button>
+        </header>
+        <div class="settings-list">
+          <div class="settings-row">
+            <label for="setting-masterVolume">Master Volume</label>
+            <input type="range" id="setting-masterVolume" min="0" max="100" step="1">
+          </div>
+          <div class="settings-row">
+            <label for="setting-sfxVolume">SFX Volume</label>
+            <input type="range" id="setting-sfxVolume" min="0" max="100" step="1">
+          </div>
+          <div class="settings-row">
+            <label for="setting-glowIntensity">Glow Intensity</label>
+            <input type="range" id="setting-glowIntensity" min="0" max="150" step="5">
+          </div>
+          <div class="settings-row">
+            <label for="setting-graphicsQuality">Graphics Quality</label>
+            <select id="setting-graphicsQuality">
+              <option value="low">Low</option>
+              <option value="medium">Medium</option>
+              <option value="high">High</option>
+            </select>
+          </div>
+          <div class="settings-row">
+            <label for="setting-screenShake">Screen Shake</label>
+            <input type="range" id="setting-screenShake" min="0" max="100" step="5">
+          </div>
+          <div class="settings-row">
+            <label for="setting-particleIntensity">Particle Intensity</label>
+            <input type="range" id="setting-particleIntensity" min="0" max="100" step="5">
+          </div>
+          <div class="settings-row settings-row--toggle">
+            <label for="setting-reducedMotion">Reduced Motion</label>
+            <input type="checkbox" id="setting-reducedMotion" class="toggle">
+          </div>
+          <div class="settings-row settings-row--toggle">
+            <label for="setting-colorblindMode">Colorblind-Friendly Palette</label>
+            <input type="checkbox" id="setting-colorblindMode" class="toggle">
+          </div>
+        </div>
+        <h2 class="screen-subheading">Key Bindings</h2>
+        <div id="settings-keybinds" class="keybind-list"></div>
+        <div class="overlay-actions">
+          <button id="settings-reset-button" class="btn btn--ghost" type="button">Reset to Defaults</button>
+        </div>
+        <section class="profile-reset" aria-labelledby="profile-reset-title">
+          <div class="profile-reset__copy">
+            <h2 id="profile-reset-title">Progression Profile</h2>
+            <p>Clear earned XP, stats, achievements, and cosmetic unlocks. Your settings, key bindings, and mode records stay saved.</p>
+          </div>
+          <button id="settings-reset-profile-button" class="btn btn--danger-ghost" type="button" aria-controls="profile-reset-confirm" aria-expanded="false">Reset Progression</button>
+        </section>
+        <div id="profile-reset-confirm" class="profile-reset-confirm" hidden aria-labelledby="profile-reset-confirm-title">
+          <div>
+            <h3 id="profile-reset-confirm-title">Reset your progression?</h3>
+            <p>This permanently clears your player level, lifetime and session stats, achievements, and unlocked cosmetics on this device.</p>
+          </div>
+          <div class="profile-reset-confirm__actions">
+            <button id="settings-cancel-profile-reset" class="btn btn--ghost" type="button">Keep Profile</button>
+            <button id="settings-confirm-profile-reset" class="btn btn--danger" type="button">Reset Profile</button>
+          </div>
+        </div>
+        <p id="profile-reset-status" class="profile-reset-status" role="status" aria-live="polite"></p>
+      </div>
+    </section>
+  </div>
+
+  <script type="module" src="/src/entry.js"></script>
+</body>
+</html>
