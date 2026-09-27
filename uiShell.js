@@ -248,6 +248,7 @@ TETRIS.UIShell = class UIShell {
 
   _bindGameOverOverlay() {
     document.getElementById('gameover-menu-button').addEventListener('click', () => {
+      document.getElementById('game-over-overlay').classList.remove('visible');
       this.showScreen('main-menu');
     });
   }

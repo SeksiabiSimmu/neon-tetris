@@ -22,7 +22,7 @@ TETRIS.ModeRecords = class ModeRecords {
   // it if better. Returns { isNewRecord, previous } so the caller can
   // decide whether to celebrate.
   submit(modeId, key, value, betterWhenLower, extra) {
-    if (typeof modeId !== 'string' || typeof key !== 'string' || !Number.isFinite(value)) {
+    if (typeof modeId !== 'string' || typeof key !== 'string' || !Number.isFinite(value) || value < 0) {
       return { isNewRecord: false, previous: null };
     }
     if (!this.records[modeId]) this.records[modeId] = {};
@@ -48,11 +48,11 @@ TETRIS.ModeRecords = class ModeRecords {
           if (!TETRIS.GAME_MODES[modeId] || !modeRecords || typeof modeRecords !== 'object' || Array.isArray(modeRecords)) return;
           clean[modeId] = {};
           Object.entries(modeRecords).forEach(([key, record]) => {
-            if (!record || typeof record !== 'object' || !Number.isFinite(record.value)) return;
+            if (!record || typeof record !== 'object' || !Number.isFinite(record.value) || record.value < 0) return;
             clean[modeId][key] = {
               value: record.value,
               extra: record.extra && typeof record.extra === 'object' && !Array.isArray(record.extra) ? record.extra : {},
-              achievedAt: Number.isFinite(record.achievedAt) ? record.achievedAt : 0,
+              achievedAt: Number.isFinite(record.achievedAt) && record.achievedAt >= 0 ? record.achievedAt : 0,
             };
           });
         });
