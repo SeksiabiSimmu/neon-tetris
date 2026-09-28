@@ -3,8 +3,8 @@ import '@fontsource/chakra-petch/latin-500.css';
 import '@fontsource/chakra-petch/latin-600.css';
 import '@fontsource/chakra-petch/latin-700.css';
 
-// Keep the existing global-script dependency order while allowing Vite to
-// bundle the game and its shared TETRIS namespace into local assets.
+// Legacy modules register on window.TETRIS in dependency order. Focused ES
+// modules imported by those files use explicit imports and dependencies.
 import '../constants.js';
 import '../gameState.js';
 import '../piece.js';

@@ -1,4 +1,4 @@
-/** Observe the game's existing event records without mutating simulation state. */
+/** Observe gameplay without mutating simulation state. Each renderer keeps its own cursor. */
 export function collectGameplayEvents(game, cursor) {
   const snapshot = readSnapshot(game);
   if (!cursor || cursor.runId !== snapshot.runId) {
@@ -8,9 +8,12 @@ export function collectGameplayEvents(game, cursor) {
   const events = [];
   const previous = cursor.activePiece;
   const active = snapshot.activePiece;
-  if (active && previous && active.type === previous.type) {
+  if (active && previous && snapshot.pieceRef === cursor.pieceRef) {
     if (active.col !== previous.col) events.push({ type: 'move', detail: active });
     if (active.rotation !== previous.rotation) events.push({ type: 'rotate', detail: active });
+    if (active.row !== previous.row) events.push({ type: 'fall', detail: { ...active, isSoftDropping: snapshot.isSoftDropping } });
+  } else if (active && snapshot.pieceRef !== cursor.pieceRef) {
+    events.push({ type: 'spawn', detail: active });
   }
 
   if (!cursor.isSoftDropping && snapshot.isSoftDropping) events.push({ type: 'softDrop', detail: active });
@@ -34,6 +37,9 @@ export function collectGameplayEvents(game, cursor) {
     if (clear.isPerfectClear) events.push({ type: 'perfectClear', detail: clear });
     if (clear.leveledUp) events.push({ type: 'levelUp', detail: clear });
   }
+  if (snapshot.level > cursor.level && !events.some((event) => event.type === 'levelUp')) {
+    events.push({ type: 'levelUp', detail: { level: snapshot.level } });
+  }
 
   return { events, cursor: snapshot };
 }
@@ -42,6 +48,8 @@ function readSnapshot(game) {
   const active = game.activePiece;
   return {
     runId: game.runId,
+    level: game.scoring?.level ?? 1,
+    pieceRef: active || null,
     activePiece: active ? {
       type: active.type,
       col: active.col,

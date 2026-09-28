@@ -4,10 +4,8 @@
 // file has behavior — it's the single source of truth that every other
 // module reads from. Loaded first, before any other script.
 //
-// Everything hangs off a shared `TETRIS` namespace object instead of using
-// ES modules, so the game can be opened directly as a local file:// page
-// without a dev server (browsers block module imports over file://, but
-// plain <script> tags work fine).
+// The older gameplay modules register on the shared `TETRIS` namespace.
+// Vite bundles these scripts with the newer ES modules for browser and desktop.
 
 window.TETRIS = window.TETRIS || {};
 

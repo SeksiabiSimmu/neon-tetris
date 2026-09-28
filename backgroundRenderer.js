@@ -1,3 +1,7 @@
+import { collectGameplayEvents } from './src/rendering/gameplaySignals.js';
+
+const TETRIS = window.TETRIS;
+
 // Lightweight projected worlds behind the playfield. Perspective grids and
 // shaded silhouettes add 3D depth without a separate scene or WebGL system.
 TETRIS.BackgroundRenderer = class BackgroundRenderer {
@@ -21,14 +25,7 @@ TETRIS.BackgroundRenderer = class BackgroundRenderer {
     this.pressure = 0;
     this.motionScale = 1;
     this.reactions = { impact: 0, clear: 0, combo: 0, spin: 0, perfect: 0, level: 0, rotate: 0, move: 0, b2b: 0 };
-    this.lastDropId = 0;
-    this.lastLockId = 0;
-    this.lastClearInfo = null;
-    this.lastLevel = 1;
-    this.lastPiece = null;
-    this.lastRotation = -1;
-    this.lastCol = 0;
-    this.lastRow = 0;
+    this.eventCursor = null;
   }
 
   resize(width, height) {
@@ -75,8 +72,8 @@ TETRIS.BackgroundRenderer = class BackgroundRenderer {
     this.mode = mode;
     this.runId = runId;
 
-    if (newRun) this._syncEvents(game, level);
-    else if (game) this._observe(game, dt, level);
+    if (newRun) this._syncEvents(game);
+    else if (game) this._observe(game, dt);
     this._updatePressure(game, level);
 
     if (mode === 'endless') {
@@ -102,57 +99,32 @@ TETRIS.BackgroundRenderer = class BackgroundRenderer {
     this.particles.update(dt);
   }
 
-  _syncEvents(game, level) {
+  _syncEvents(game) {
     this.reactions = { impact: 0, clear: 0, combo: 0, spin: 0, perfect: 0, level: 0, rotate: 0, move: 0, b2b: 0 };
-    this.lastDropId = game ? game.hardDropSequence || 0 : 0;
-    this.lastLockId = game ? game.lockSequence || 0 : 0;
-    this.lastClearInfo = game ? game.lastClearInfo : null;
-    this.lastLevel = level;
-    this.lastPiece = game ? game.activePiece : null;
-    this.lastRotation = this.lastPiece ? this.lastPiece.rotation : -1;
-    this.lastCol = this.lastPiece ? this.lastPiece.col : 0;
-    this.lastRow = this.lastPiece ? this.lastPiece.row : 0;
+    this.eventCursor = game ? collectGameplayEvents(game, null).cursor : null;
   }
 
-  _observe(game, dt, level) {
+  _observe(game, dt) {
     const r = this.reactions;
     const fade = { impact: 520, clear: 880, combo: 1250, spin: 1050, perfect: 1700, level: 1250, rotate: 420, move: 380, b2b: 1100 };
     Object.keys(r).forEach((key) => { r[key] *= Math.exp(-dt / fade[key]); });
-    const drop = game.lastHardDropEvent;
-    if (drop && drop.id !== this.lastDropId) {
-      r.impact = Math.max(r.impact, Math.min(1, 0.28 + Math.max(0, drop.row - drop.fromRow) / 13));
-      this.lastDropId = drop.id;
-    }
-    const lock = game.lastLockEvent;
-    if (lock && lock.id !== this.lastLockId) { r.impact = Math.max(r.impact, 0.38); this.lastLockId = lock.id; }
-    const info = game.lastClearInfo;
-    if (info && info !== this.lastClearInfo) {
-      if (info.linesCleared) r.clear = Math.max(r.clear, Math.min(1, 0.28 + info.linesCleared * 0.16));
-      if (info.comboCount > 0) r.combo = Math.max(r.combo, Math.min(1, 0.25 + info.comboCount * 0.055));
-      if (info.tSpinType) r.spin = 1;
-      if (info.isPerfectClear) r.perfect = 1;
-      if (info.leveledUp) r.level = 1;
-      if (info.backToBackApplied) r.b2b = 1;
-      this.lastClearInfo = info;
-    }
-    if (level > this.lastLevel) r.level = 1;
-    this.lastLevel = level;
-    const piece = game.activePiece;
-    if (piece && piece === this.lastPiece) {
-      if (piece.rotation !== this.lastRotation) r.rotate = 1;
-      if (piece.col !== this.lastCol) r.move = Math.max(r.move, 0.55);
-      if (piece.row !== this.lastRow) {
-        r.move = Math.max(r.move, game.isSoftDropping ? 0.25 : 0.12);
-      }
-    } else if (piece) {
-      // A held/swapped-in piece gets a small visual response without needing
-      // a second event channel in Game.
-      r.move = Math.max(r.move, 0.22);
-    }
-    this.lastPiece = piece;
-    this.lastRotation = piece ? piece.rotation : -1;
-    this.lastCol = piece ? piece.col : 0;
-    this.lastRow = piece ? piece.row : 0;
+    const collection = collectGameplayEvents(game, this.eventCursor);
+    this.eventCursor = collection.cursor;
+    collection.events.forEach(({ type, detail }) => {
+      if (type === 'hardDrop') {
+        r.impact = Math.max(r.impact, Math.min(1, 0.28 + Math.max(0, detail.row - detail.fromRow) / 13));
+      } else if (type === 'lock') r.impact = Math.max(r.impact, 0.38);
+      else if (type === 'clear' && detail.linesCleared) r.clear = Math.max(r.clear, Math.min(1, 0.28 + detail.linesCleared * 0.16));
+      else if (type === 'combo') r.combo = Math.max(r.combo, Math.min(1, 0.25 + detail.comboCount * 0.055));
+      else if (type === 'tSpin') r.spin = 1;
+      else if (type === 'perfectClear') r.perfect = 1;
+      else if (type === 'levelUp') r.level = 1;
+      else if (type === 'backToBack') r.b2b = 1;
+      else if (type === 'rotate') r.rotate = 1;
+      else if (type === 'move') r.move = Math.max(r.move, 0.55);
+      else if (type === 'fall') r.move = Math.max(r.move, detail.isSoftDropping ? 0.25 : 0.12);
+      else if (type === 'spawn') r.move = Math.max(r.move, 0.22);
+    });
   }
 
   _updatePressure(game, level) {
