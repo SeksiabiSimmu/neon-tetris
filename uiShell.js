@@ -1,7 +1,9 @@
+import { SettingsPanel } from './src/ui/SettingsPanel.js';
+
 // js/uiShell.js
 //
-// The UI shell around the game: the main menu and every screen reachable
-// from it, plus the pause overlay and the enhanced game-over overlay.
+// The UI shell owns navigation, menus, HUD, and game overlays. Settings
+// controls and key rebinding live in SettingsPanel.
 // Like EffectsManager/UIAnimator, this only ever *reads* Game/Scoring/
 // Progression and calls their public methods (start, pause, equip,
 // set) — it owns no gameplay state itself.
@@ -10,6 +12,8 @@
 // handles the fade/scale transition); this file's job is deciding which
 // one is active and keeping each one's dynamic content in sync with the
 // underlying data right before it's shown.
+
+const TETRIS = window.TETRIS;
 
 TETRIS.UIShell = class UIShell {
   constructor({ game, progression, settings, renderer, input, modeRecords, audio }) {
@@ -29,13 +33,19 @@ TETRIS.UIShell = class UIShell {
     this.currentScreen = null;
     this.hasShownScreen = false;
     this.screenBeforePause = null; // so Settings-from-Pause returns to Pause, not the main menu
-    this.rebindingAction = null;
     this.pendingModeConfig = {}; // modeId -> chosen config, while browsing mode-select
+    this.settingsPanel = new SettingsPanel({
+      game, progression, settings, renderer, input, audio,
+      onProfileReset: () => {
+        TETRIS.applyCosmetics(this.renderer, this.progression);
+        this._renderMainMenu();
+      },
+    });
 
     this._bindMenu();
     this._bindPauseOverlay();
     this._bindGameOverOverlay();
-    this._bindSettingsControls();
+    this.settingsPanel.bind();
     window.addEventListener('keydown', (event) => {
       if (event.key === 'Tab' && !this.currentScreen) {
         const dialog = document.getElementById('pause-overlay').classList.contains('visible')
@@ -45,7 +55,7 @@ TETRIS.UIShell = class UIShell {
             : null;
         if (dialog) this._trapDialogFocus(event, dialog);
       }
-      if (event.code !== 'Escape' || event.repeat || !this.currentScreen || this.rebindingAction) return;
+      if (event.code !== 'Escape' || event.repeat || !this.currentScreen || this.settingsPanel.isRebinding) return;
       event.preventDefault();
       this._returnFromScreen();
     });
@@ -73,7 +83,7 @@ TETRIS.UIShell = class UIShell {
   showScreen(name) {
     const el = this.screens[name];
     if (!el) return;
-    if (this.rebindingAction && name !== 'settings') this._cancelRebinding();
+    if (this.settingsPanel.isRebinding && name !== 'settings') this.settingsPanel.cancelRebinding();
     const previous = this.currentScreen;
     Object.values(this.screens).forEach((el) => el.classList.remove('active'));
     el.classList.add('active');
@@ -87,7 +97,7 @@ TETRIS.UIShell = class UIShell {
   }
 
   hideAllScreens() {
-    this._cancelRebinding();
+    this.settingsPanel.cancelRebinding();
     Object.values(this.screens).forEach((el) => el.classList.remove('active'));
     this.currentScreen = null;
     this.input.setGameplayEnabled(true);
@@ -114,7 +124,7 @@ TETRIS.UIShell = class UIShell {
     else if (name === 'achievements') this._renderAchievementsScreen();
     else if (name === 'statistics') this._renderStatisticsScreen();
     else if (name === 'customization') this._renderCustomizationScreen();
-    else if (name === 'settings') this._renderSettingsScreen();
+    else if (name === 'settings') this.settingsPanel.render();
   }
 
   // --- main menu -----------------------------------------------------------
@@ -500,149 +510,4 @@ TETRIS.UIShell = class UIShell {
     });
   }
 
-  // --- settings screen ---------------------------------------------------
-
-  _bindSettingsControls() {
-    const s = this.settings;
-    const apply = () => {
-      s.applyTo({ renderer: this.renderer, input: this.input, audio: this.audio });
-    };
-
-    ['masterVolume', 'sfxVolume', 'glowIntensity', 'screenShake', 'particleIntensity'].forEach((key) => {
-      document.getElementById(`setting-${key}`).addEventListener('input', (e) => {
-        s.set(key, key === 'glowIntensity' ? Number(e.target.value) / 100 : Number(e.target.value), false);
-        apply();
-      });
-      document.getElementById(`setting-${key}`).addEventListener('change', () => s.save());
-    });
-
-    document.getElementById('setting-graphicsQuality').addEventListener('change', (e) => {
-      s.set('graphicsQuality', e.target.value);
-      apply();
-    });
-
-    ['reducedMotion', 'colorblindMode'].forEach((key) => {
-      document.getElementById(`setting-${key}`).addEventListener('change', (e) => {
-        s.set(key, e.target.checked);
-        apply();
-      });
-    });
-
-    document.getElementById('settings-reset-button').addEventListener('click', () => {
-      s.resetToDefaults();
-      apply();
-      this._renderSettingsScreen();
-    });
-
-      const resetProfileButton = document.getElementById('settings-reset-profile-button');
-      const resetConfirm = document.getElementById('profile-reset-confirm');
-      const resetStatus = document.getElementById('profile-reset-status');
-      const cancelProfileReset = document.getElementById('settings-cancel-profile-reset');
-
-      resetProfileButton.addEventListener('click', () => {
-        resetStatus.textContent = '';
-        resetStatus.classList.remove('is-error');
-        resetConfirm.hidden = false;
-        resetProfileButton.setAttribute('aria-expanded', 'true');
-        cancelProfileReset.focus();
-      });
-
-      cancelProfileReset.addEventListener('click', () => {
-        resetConfirm.hidden = true;
-        resetProfileButton.setAttribute('aria-expanded', 'false');
-        resetProfileButton.focus({ preventScroll: true });
-      });
-
-      document.getElementById('settings-confirm-profile-reset').addEventListener('click', () => {
-        const saved = this.progression.resetProfile(this.game);
-        TETRIS.applyCosmetics(this.renderer, this.progression);
-        this.settings.applyTo({ renderer: this.renderer, input: this.input, audio: this.audio });
-        this._renderMainMenu();
-        resetConfirm.hidden = true;
-        resetProfileButton.setAttribute('aria-expanded', 'false');
-        resetStatus.classList.toggle('is-error', !saved);
-        resetStatus.textContent = saved
-          ? 'Progression reset. Settings, key bindings, and mode records were kept.'
-          : 'Progression reset for this session, but browser storage could not save the change.';
-        resetProfileButton.focus({ preventScroll: true });
-        if (this.audio) this.audio.play('menu');
-      });
-    }
-
-    _renderSettingsScreen() {
-      document.getElementById('profile-reset-confirm').hidden = true;
-      document.getElementById('settings-reset-profile-button').setAttribute('aria-expanded', 'false');
-      const resetStatus = document.getElementById('profile-reset-status');
-      resetStatus.textContent = '';
-      resetStatus.classList.remove('is-error');
-      const v = this.settings.values;
-    document.getElementById('setting-masterVolume').value = v.masterVolume;
-    document.getElementById('setting-sfxVolume').value = v.sfxVolume;
-    document.getElementById('setting-glowIntensity').value = Math.round(v.glowIntensity * 100);
-    document.getElementById('setting-screenShake').value = v.screenShake;
-    document.getElementById('setting-particleIntensity').value = v.particleIntensity;
-    document.getElementById('setting-graphicsQuality').value = v.graphicsQuality;
-    document.getElementById('setting-reducedMotion').checked = v.reducedMotion;
-    document.getElementById('setting-colorblindMode').checked = v.colorblindMode;
-
-    const keybindActions = [
-      ['left', 'Move Left'], ['right', 'Move Right'], ['softDrop', 'Soft Drop'],
-      ['hardDrop', 'Hard Drop'], ['rotateCW', 'Rotate CW'], ['rotateCCW', 'Rotate CCW'], ['hold', 'Hold'],
-    ];
-    const container = document.getElementById('settings-keybinds');
-    container.innerHTML = keybindActions.map(([action, label]) => {
-      const code = this._codeForAction(action);
-      return `<div class="keybind-row"><span>${label}</span><button type="button" data-action="${action}">${this._codeLabel(code)}</button></div>`;
-    }).join('');
-
-    container.querySelectorAll('button[data-action]').forEach((btn) => {
-      btn.addEventListener('click', () => this._startRebind(btn));
-    });
-  }
-
-  _codeForAction(action) {
-    return Object.keys(this.input.keyMap).find((code) => this.input.keyMap[code] === action) || '—';
-  }
-
-  _codeLabel(code) {
-    return { ArrowLeft: '←', ArrowRight: '→', ArrowDown: '↓', ArrowUp: '↑', Space: 'Space' }[code] || code.replace('Key', '');
-  }
-
-  _startRebind(btn) {
-    if (this.rebindingAction) return;
-    this.rebindingAction = btn.dataset.action;
-    btn.textContent = 'Press a key…';
-    btn.classList.add('is-listening');
-
-    const onKey = (e) => {
-      e.preventDefault();
-      e.stopImmediatePropagation();
-      if (e.code === 'Escape') {
-        this._cancelRebinding();
-        this._renderSettingsScreen();
-        const cancelButton = document.querySelector(`#settings-keybinds button[data-action="${btn.dataset.action}"]`);
-        if (cancelButton) cancelButton.focus({ preventScroll: true });
-        return;
-      }
-      const map = Object.assign({}, this.input.keyMap);
-      // Clear any other binding currently pointing at this action, then
-      // remove whatever the pressed key used to do, and bind it fresh.
-      Object.keys(map).forEach((code) => { if (map[code] === this.rebindingAction) delete map[code]; });
-      map[e.code] = this.rebindingAction;
-      this.input.setKeyBindings(map);
-      this.settings.set('keyBindings', map);
-      this._cancelRebinding();
-      this._renderSettingsScreen();
-      const updatedButton = document.querySelector(`#settings-keybinds button[data-action="${btn.dataset.action}"]`);
-      if (updatedButton) updatedButton.focus({ preventScroll: true });
-    };
-    this.rebindKeyListener = onKey;
-    window.addEventListener('keydown', onKey, true);
-  }
-
-  _cancelRebinding() {
-    if (this.rebindKeyListener) window.removeEventListener('keydown', this.rebindKeyListener, true);
-    this.rebindKeyListener = null;
-    this.rebindingAction = null;
-  }
 };

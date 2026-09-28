@@ -2,6 +2,8 @@
 
 A desktop and browser Tetris game with six modes, reactive 3D worlds, synthesized audio, progression, and unlockable visual customization. The 3D presentation has a Canvas fallback when WebGL is unavailable.
 
+For code ownership and dependency boundaries, see [the architecture map](docs/architecture.md).
+
 ![Neon Tetris icon](assets/icon.png)
 
 ## Play on Windows
