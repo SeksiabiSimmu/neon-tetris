@@ -12,10 +12,9 @@ TETRIS.SettingsManager = class SettingsManager {
     return {
       masterVolume: 80,
       sfxVolume: 80,
-      screenShake: 60, // 0 - 100 intensity
       particleIntensity: 80, // 0 - 100 intensity
       glowIntensity: 1, // 0 - 1.5
-      reducedMotion: !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches),
+      reducedMotion: false,
       colorblindMode: false,
       graphicsQuality: 'high', // 'low' | 'medium' | 'high'
       keyBindings: null,
@@ -39,7 +38,7 @@ TETRIS.SettingsManager = class SettingsManager {
 
   _normalizeValue(key, value) {
     const number = Number(value);
-    if (['masterVolume', 'sfxVolume', 'screenShake', 'particleIntensity'].includes(key)) {
+    if (['masterVolume', 'sfxVolume', 'particleIntensity'].includes(key)) {
       return Number.isFinite(number) ? Math.round(Math.max(0, Math.min(100, number))) : this._defaults()[key];
     }
     if (key === 'glowIntensity') {
@@ -72,8 +71,7 @@ TETRIS.SettingsManager = class SettingsManager {
       Object.keys(defaults).forEach((key) => {
         if (Object.prototype.hasOwnProperty.call(data, key)) this.values[key] = this._normalizeValue(key, data[key]);
       });
-      // Migrate the earlier on/off controls to the new adjustable sliders.
-      if (typeof data.screenShake === 'boolean') this.values.screenShake = data.screenShake ? 60 : 0;
+      // Migrate the earlier on/off particle control to its adjustable slider.
       if (typeof data.particles === 'boolean' && !Object.prototype.hasOwnProperty.call(data, 'particleIntensity')) {
         this.values.particleIntensity = data.particles ? 80 : 0;
       }
@@ -94,7 +92,6 @@ TETRIS.SettingsManager = class SettingsManager {
     const v = this.values;
     if (renderer) {
       const particles = v.reducedMotion ? 0 : v.particleIntensity / 100;
-      renderer.effects.shakeScale = v.reducedMotion ? 0 : v.screenShake / 100;
       renderer.effects.reducedMotion = v.reducedMotion;
       renderer.boardParticles.intensityScale = particles;
       renderer.boardParticles.enabled = particles > 0;
@@ -114,7 +111,6 @@ TETRIS.SettingsManager = class SettingsManager {
       renderer.webgl?.setSettings({
         reducedMotion: v.reducedMotion,
         colorblindMode: v.colorblindMode,
-        screenShake: v.reducedMotion ? 0 : v.screenShake / 100,
         particleIntensity: v.reducedMotion ? 0 : v.particleIntensity / 100,
         glowIntensity: v.glowIntensity * this._qualityScale(v.graphicsQuality),
       });

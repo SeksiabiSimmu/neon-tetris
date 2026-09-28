@@ -14,12 +14,14 @@ TETRIS.UIAnimator = class UIAnimator {
     this.displayed = { score: 0, level: 1, lines: 0 };
     this.target = { score: 0, level: 1, lines: 0 };
     this._lastSeenClearInfo = null;
+    this._lastComboCount = 0;
   }
 
   reset() {
     this.displayed = { score: 0, level: 1, lines: 0 };
     this.target = { score: 0, level: 1, lines: 0 };
     this._lastSeenClearInfo = null;
+    this._lastComboCount = 0;
   }
 
   update(dt, game) {
@@ -57,9 +59,15 @@ TETRIS.UIAnimator = class UIAnimator {
       const tier = scoring.comboCount >= 6 ? 3 : scoring.comboCount >= 3 ? 2 : 1;
       this.dom.comboBadge.classList.toggle('tier-2', tier === 2);
       this.dom.comboBadge.classList.toggle('tier-3', tier === 3);
+      if (scoring.comboCount > this._lastComboCount) {
+        this.dom.comboBadge.classList.remove('combo-pop');
+        void this.dom.comboBadge.offsetWidth;
+        this.dom.comboBadge.classList.add('combo-pop');
+      }
     } else {
-      this.dom.comboBadge.classList.remove('visible', 'tier-2', 'tier-3');
+      this.dom.comboBadge.classList.remove('visible', 'tier-2', 'tier-3', 'combo-pop');
     }
+    this._lastComboCount = scoring.comboCount;
     this.dom.b2bBadge.classList.toggle('visible', !!scoring.backToBack);
   }
 

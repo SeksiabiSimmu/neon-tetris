@@ -3,7 +3,7 @@
 // The reusable "game feel" system. Everything here is *observational*: it
 // watches Game/Scoring/Board state each frame and reacts, but never calls
 // into Game or mutates it — gameplay stays fully decoupled from
-// presentation. Every trigger method below (triggerShake, spawnRing,
+// presentation. Every trigger method below (spawnRing,
 // pulseGrid, particles.spawnBurst) is generic and reusable on its own;
 // the "what happens for a Tetris vs a Single" choreography is just this
 // file calling those generic primitives with different numbers, all of
@@ -18,7 +18,6 @@ TETRIS.EffectsManager = class EffectsManager {
     this.clearFlashColor = '#ffffff'; // overridable by the equipped clear-effect cosmetic
     this.clearAccentColor = null;
     this.clearParticleShape = 'spark';
-    this.shakeScale = 1;
     this.reducedMotion = false;
     this.clock = 0;
 
@@ -27,6 +26,8 @@ TETRIS.EffectsManager = class EffectsManager {
     this.prevPieceType = null;
     this.prevPieceRow = null;
     this.prevPieceRef = null;
+    this.visualPiece = null;
+    this.dropMotion = null;
 
     // Line-clear lifecycle.
     this.prevClearingRows = null;
@@ -38,36 +39,10 @@ TETRIS.EffectsManager = class EffectsManager {
 
     // Reusable primitives.
     this.rings = []; // { x, y, color, maxRadius, delay, life, maxLife, lineWidth }
-    this.shake = { elapsed: 0, duration: 0, intensity: 0 };
     this.gridPulse = 0; // 0-1, decays; drawGridLines reads this to brighten briefly
   }
 
   // --- generic, reusable trigger API --------------------------------------
-
-  // Takes the stronger/longer of the current and new shake rather than
-  // stacking, so overlapping triggers (e.g. a Tetris landing mid-combo)
-  // can't run away past SHAKE_MAX_PX — screen shake should read as
-  // "impactful," never as motion sickness.
-  triggerShake(intensity, duration) {
-    if (this.reducedMotion || this.shakeScale <= 0) return;
-    const capped = Math.min(TETRIS.VFX.SHAKE_MAX_PX, intensity * this.shakeScale);
-    const remaining = this.shake.duration - this.shake.elapsed;
-    if (capped >= this.shake.intensity || remaining <= 0) {
-      this.shake = { elapsed: 0, duration, intensity: capped };
-    } else {
-      this.shake = { elapsed: 0, duration: Math.max(remaining, duration), intensity: this.shake.intensity };
-    }
-  }
-
-  getShakeOffset() {
-    if (this.reducedMotion || this.shakeScale <= 0 || this.shake.intensity <= 0 || this.shake.elapsed >= this.shake.duration) return { x: 0, y: 0 };
-    const remaining = 1 - this.shake.elapsed / this.shake.duration; // linear decay
-    const mag = this.shake.intensity * remaining;
-    return {
-      x: Math.sin(this.shake.elapsed * 0.045) * mag,
-      y: Math.sin(this.shake.elapsed * 0.061 + 0.8) * mag,
-    };
-  }
 
   spawnRing(x, y, color, maxRadius, options = {}) {
     if (this.reducedMotion) return;
@@ -90,6 +65,8 @@ TETRIS.EffectsManager = class EffectsManager {
     this.prevPieceType = null;
     this.prevPieceRow = null;
     this.prevPieceRef = null;
+    this.visualPiece = null;
+    this.dropMotion = null;
     this.prevClearingRows = null;
     this._lastClearInfoSeen = null;
     if (game) {
@@ -99,7 +76,6 @@ TETRIS.EffectsManager = class EffectsManager {
     this.collapseShift = null;
     this.collapseElapsed = 0;
     this.rings.length = 0;
-    this.shake = { elapsed: 0, duration: 0, intensity: 0 };
     this.gridPulse = 0;
     this.particles.clearTransient();
   }
@@ -130,6 +106,10 @@ TETRIS.EffectsManager = class EffectsManager {
       this._spawnLockSettle(game.lastLockEvent, boardWidth, cellSize);
     }
     this._updateClearTransitions(game, boardWidth, cellSize);
+    if (this.dropMotion) {
+      this.dropMotion.age += dt;
+      if (this.dropMotion.age >= this.dropMotion.life || this.reducedMotion) this.dropMotion = null;
+    }
 
     if (game.lastClearInfo && game.lastClearInfo !== this._lastClearInfoSeen) {
       this._lastClearInfoSeen = game.lastClearInfo;
@@ -139,7 +119,6 @@ TETRIS.EffectsManager = class EffectsManager {
     this.rings.forEach((r) => { if (r.delay > 0) r.delay -= dt; else r.life += dt; });
     this.rings = this.rings.filter((r) => r.delay > 0 || r.life < r.maxLife);
 
-    if (this.shake.intensity > 0) this.shake.elapsed += dt;
     if (this.reducedMotion) this.rings.length = 0;
     if (this.collapseShift) {
       this.collapseElapsed += dt;
@@ -157,6 +136,23 @@ TETRIS.EffectsManager = class EffectsManager {
     const piece = game.activePiece;
 
     if (piece) {
+      const target = piece.getCells().map(({ col, row }) => ({ col, row }));
+      const state = `${piece.col}:${piece.row}:${piece.rotation}`;
+      const motion = this.visualPiece;
+      if (!motion || motion.ref !== piece || this.reducedMotion) {
+        this.visualPiece = { ref: piece, state, from: target, to: target,
+          age: 1, life: 1, rotation: piece.rotation, row: piece.row };
+      } else if (motion.state !== state) {
+        const t = 1 - (1 - Math.min(1, motion.age / motion.life)) ** 3;
+        const from = motion.to.map((cell, index) => ({
+          col: motion.from[index].col + (cell.col - motion.from[index].col) * t,
+          row: motion.from[index].row + (cell.row - motion.from[index].row) * t,
+        }));
+        this.visualPiece = { ref: piece, state, from, to: target, age: 0,
+          life: piece.rotation !== motion.rotation ? 125 : piece.row !== motion.row ? 70 : 85,
+          rotation: piece.rotation, row: piece.row };
+      }
+      this.visualPiece.age = Math.min(this.visualPiece.life, this.visualPiece.age + dt);
       if (this.prevPieceRef !== piece) {
         this.trail = []; // a brand-new piece shouldn't inherit a trail from whatever came before it
         this.prevPieceRow = piece.row;
@@ -176,6 +172,7 @@ TETRIS.EffectsManager = class EffectsManager {
       }
       this.prevPieceType = piece.type;
     } else {
+      this.visualPiece = null;
       this.prevPieceRef = null;
       this.prevPieceType = null;
       this.prevPieceRow = null;
@@ -184,6 +181,29 @@ TETRIS.EffectsManager = class EffectsManager {
     this.trail.forEach((s) => { s.age += dt; });
     this.trail = this.trail.filter((s) => s.age < TETRIS.VISUAL.TRAIL_LIFETIME_MS);
     while (this.trail.length > TETRIS.VISUAL.TRAIL_MAX_STEPS) this.trail.shift();
+  }
+
+  getVisualPieceCells(piece) {
+    const motion = this.visualPiece;
+    if (!piece || !motion || motion.ref !== piece) return piece?.getCells() || [];
+    const t = 1 - (1 - Math.min(1, motion.age / motion.life)) ** 3;
+    return motion.to.map((cell, index) => ({
+      col: motion.from[index].col + (cell.col - motion.from[index].col) * t,
+      row: motion.from[index].row + (cell.row - motion.from[index].row) * t,
+    }));
+  }
+
+  getDropCells() {
+    const drop = this.dropMotion;
+    if (!drop) return [];
+    const t = 1 - (1 - Math.min(1, drop.age / drop.life)) ** 3;
+    const row = drop.event.fromRow + (drop.event.row - drop.event.fromRow) * t;
+    return TETRIS.SHAPES[drop.event.type][drop.event.rotation]
+      .map(([dc, dr]) => ({ col: drop.event.col + dc, row: row + dr, type: drop.event.type }));
+  }
+
+  isDropCellHidden(col, row) {
+    return !!this.dropMotion?.locked.has(`${col}:${row}`);
   }
 
   _updateClearTransitions(game, boardWidth, cellSize) {
@@ -225,8 +245,6 @@ TETRIS.EffectsManager = class EffectsManager {
       this.spawnRing(boardWidth / 2, centerY, this.clearAccentColor || this.clearFlashColor, boardWidth * 0.65, { life: 420 });
     }
 
-    const shake = TETRIS.VFX.LINE_CLEAR_SHAKE[rows.length] || 0;
-    if (shake > 0) this.triggerShake(shake, TETRIS.VFX.LINE_CLEAR_SHAKE_DURATION_MS);
 
     this.pulseGrid(intensity);
   }
@@ -248,7 +266,6 @@ TETRIS.EffectsManager = class EffectsManager {
       this.particles.spawnBurst(cx, cy, color, TETRIS.VFX.PERFECT_CLEAR_PARTICLES, {
         speed: 160, life: 900, shape: this.clearParticleShape, trail: true,
       });
-      this.triggerShake(TETRIS.VFX.PERFECT_CLEAR_SHAKE, 420);
       this.pulseGrid(1);
       return;
     }
@@ -259,7 +276,6 @@ TETRIS.EffectsManager = class EffectsManager {
         this.spawnRing(cx, cy, color, boardWidth * (0.3 + i * 0.18), { delay: i * 70, life: 450 });
       }
       this.particles.spawnBurst(cx, cy, color, 30, { speed: 110, life: 500, shape: this.clearParticleShape });
-      this.triggerShake(TETRIS.VFX.T_SPIN_SHAKE, 220);
     }
 
     if (info.leveledUp) {
@@ -268,7 +284,6 @@ TETRIS.EffectsManager = class EffectsManager {
         this.spawnRing(cx, cy, '#4dd8ff', boardWidth * (0.3 + i * 0.16), { delay: i * 80, life: 600 });
       }
       this.particles.spawnBurst(cx, cy, '#ffffff', TETRIS.VFX.LEVEL_UP_PARTICLES, { speed: 140, life: 800, trail: true });
-      this.triggerShake(TETRIS.VFX.LEVEL_UP_SHAKE, 380);
       this.pulseGrid(1);
     }
 
@@ -281,12 +296,16 @@ TETRIS.EffectsManager = class EffectsManager {
       this.particles.spawnBurst(cx, cy, this.clearAccentColor || '#ffd84d', Math.round(10 + tier * 30), {
         speed: 90 + tier * 60, life: 450, shape: this.clearParticleShape,
       });
-      this.triggerShake(tier * TETRIS.VFX.COMBO_SHAKE_BONUS, 200);
     }
   }
 
   _reactToHardDrop(event, boardWidth, cellSize) {
     if (this.reducedMotion) return;
+    this.dropMotion = {
+      event, age: 0, life: 125,
+      locked: new Set(TETRIS.SHAPES[event.type][event.rotation]
+        .map(([dc, dr]) => `${event.col + dc}:${event.row + dr}`)),
+    };
     const color = this.pieceColors[event.type];
     const shape = TETRIS.SHAPES[event.type][event.rotation];
     const minCol = Math.min(...shape.map(([col]) => col));
@@ -304,7 +323,6 @@ TETRIS.EffectsManager = class EffectsManager {
     }
     this.particles.spawnBurst(cx, cy, color, 10, { speed: 70, life: 380 });
     this.spawnRing(cx, cy, color, cellSize * 2.2, { life: 260, lineWidth: 2 });
-    this.triggerShake(TETRIS.VFX.HARD_DROP_SHAKE, 140);
   }
 
   // Subtle feedback for *every* lock, hard-dropped or naturally settled —

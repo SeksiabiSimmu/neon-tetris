@@ -4,12 +4,12 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { collectGameplayEvents } from './gameplaySignals.js';
 import { createModeWorld } from './modeWorlds.js';
+import { BoardEffects3D } from './BoardEffects3D.js';
 
 const PIECE_TYPES = ['I', 'O', 'T', 'S', 'Z', 'J', 'L'];
 const BASE_SETTINGS = Object.freeze({
   reducedMotion: false,
   colorblindMode: false,
-  screenShake: 1,
   particleIntensity: 1,
   glowIntensity: 1,
 });
@@ -42,11 +42,11 @@ function roundedBlockGeometry() {
   shape.quadraticCurveTo(-0.5 + inset, -0.5 + inset, -0.5 + inset + radius, -0.5 + inset);
 
   const geometry = new THREE.ExtrudeGeometry(shape, {
-    depth: 0.16,
+    depth: 0.22,
     bevelEnabled: true,
     bevelSegments: 3,
-    bevelSize: 0.035,
-    bevelThickness: 0.035,
+    bevelSize: 0.05,
+    bevelThickness: 0.055,
     curveSegments: 4,
   });
   geometry.center();
@@ -108,7 +108,7 @@ export class PremiumSceneRenderer {
     this.eventCursor = null;
     this.runId = null;
     this.modeId = null;
-    this.shakeEnvelope = 0;
+    this.pieceMotion = null;
     this.backgroundPalette = null;
     this.ambientParticleColors = null;
     this.ambientParticleShape = 'spark';
@@ -122,6 +122,7 @@ export class PremiumSceneRenderer {
     this._createSharedResources();
     this._createBoardPresentation();
     this._createPieceLayers();
+    this.boardEffects = new BoardEffects3D(this.scene, this.blockGeometry, this.materials);
     this._onContextLost = this._handleContextLost.bind(this);
     this._onContextRestored = this._handleContextRestored.bind(this);
     canvas?.addEventListener?.('webglcontextlost', this._onContextLost, false);
@@ -325,6 +326,8 @@ export class PremiumSceneRenderer {
       this.modeId = this.modeWorld.descriptor.id;
       this.eventCursor = null;
       this.runId = null;
+      this.boardEffects.reset();
+      this.pieceMotion = null;
       this.scene.add(this.modeWorld.group);
       if (this.backgroundPalette) this.modeWorld.setPalette(this.backgroundPalette.colors, this.backgroundPalette.style);
       if (this.ambientParticleColors) this.modeWorld.setAmbientParticles(this.ambientParticleColors, this.ambientParticleShape);
@@ -334,27 +337,13 @@ export class PremiumSceneRenderer {
     if (this.runId !== game.runId) {
       this.runId = game.runId;
       this.eventCursor = null;
-      this.shakeEnvelope = 0;
+      this.boardEffects.reset();
+      this.pieceMotion = null;
     }
 
     const collection = collectGameplayEvents(game, this.eventCursor);
     this.eventCursor = collection.cursor;
-    collection.events.forEach((event) => {
-      if (this.settings.reducedMotion) return;
-      const intensity = {
-        move: 0.04, rotate: 0.06, softDrop: 0.05, hardDrop: 0.35, lock: 0.14,
-        clear: 0.52, tSpin: 0.62, combo: 0.16, backToBack: 0.22,
-        perfectClear: 0.72, levelUp: 0.64, hold: 0.08,
-      }[event.type] || 0;
-      this.shakeEnvelope = Math.min(1, this.shakeEnvelope + intensity);
-    });
-
     const dt = Math.min(50, Math.max(0, meta.dt || 16.7));
-    this.shakeEnvelope *= Math.exp(-dt / 220);
-    const shake = this.settings.reducedMotion ? 0 : this.shakeEnvelope * this.settings.screenShake * 9;
-    const time = this.elapsedMs + (this.windowRef?.performance?.now?.() || 0);
-    this.camera.position.x = Math.sin(time * 0.035) * shake;
-    this.camera.position.y = Math.cos(time * 0.047) * shake * 0.55;
 
     const background = this.modeWorld.group.children.find((child) => child.isMesh && child.material?.uniforms?.uTop);
     if (background) {
@@ -370,6 +359,7 @@ export class PremiumSceneRenderer {
       viewportWidth: this._viewportWidth,
       viewportHeight: this._viewportHeight,
     });
+    return collection.events;
   }
 
   _ensurePool(name, size) {
@@ -401,8 +391,14 @@ export class PremiumSceneRenderer {
       this._setEmissiveColor(visualMaterial, color);
       const point = worldCellPosition(rect, cols, rows, block.col, block.row, z);
       mesh.position.set(point.x, point.y, z);
-      mesh.scale.set(point.cellWidth * 0.9, point.cellHeight * 0.9, Math.min(point.cellWidth, point.cellHeight) * 0.17);
-      mesh.visible = true;
+      if (name === 'board') mesh.position.y += this.boardEffects.getRowOffset(block.row, point.cellHeight, this.settings.reducedMotion);
+      const clearing = name === 'board' && this._clearingRows?.has(block.row);
+      const vanish = clearing && !this.settings.reducedMotion
+        ? 1 - Math.max(0, (this._clearProgress - 0.5) * 2) ** 2 : 1;
+      mesh.scale.set(point.cellWidth * 0.9, point.cellHeight * 0.9 * vanish,
+        Math.min(point.cellWidth, point.cellHeight) * 0.75);
+      mesh.visible = vanish > 0.02 && (name !== 'board'
+        || !this.boardEffects.getHiddenLockCells()?.has(`${block.col}:${block.row}`));
     });
     for (let i = blocks.length; i < pool.length; i += 1) pool[i].visible = false;
   }
@@ -457,9 +453,41 @@ export class PremiumSceneRenderer {
     return blocks;
   }
 
-  _buildPieceBlocks(piece) {
-    if (!piece) return [];
-    return piece.getCells().filter(({ row }) => row >= 0).map(({ col, row }) => ({ type: piece.type, col, row }));
+  _buildPieceBlocks(piece, dt) {
+    if (!piece) {
+      this.pieceMotion = null;
+      return [];
+    }
+    const target = piece.getCells().map(({ col, row }) => ({ col, row }));
+    const state = `${piece.col}:${piece.row}:${piece.rotation}`;
+    const motion = this.pieceMotion;
+    if (!motion || motion.ref !== piece || this.settings.reducedMotion) {
+      this.pieceMotion = { ref: piece, state, from: target, to: target, age: 1, life: 1,
+        rotation: piece.rotation, row: piece.row };
+    } else if (motion.state !== state) {
+      const t = Math.min(1, motion.age / motion.life);
+      const eased = 1 - (1 - t) ** 3;
+      const from = motion.to.map((cell, index) => ({
+        col: motion.from[index].col + (cell.col - motion.from[index].col) * eased,
+        row: motion.from[index].row + (cell.row - motion.from[index].row) * eased,
+      }));
+      this.pieceMotion = {
+        ref: piece, state, from, to: target, age: 0,
+        life: piece.rotation !== motion.rotation ? 125 : piece.row !== motion.row ? 70 : 85,
+        rotation: piece.rotation, row: piece.row,
+      };
+    }
+    const current = this.pieceMotion;
+    current.age = Math.min(current.life, current.age + Math.max(0, dt || 16.7));
+    current.rotation = piece.rotation;
+    current.row = piece.row;
+    const t = Math.min(1, current.age / current.life);
+    const eased = 1 - (1 - t) ** 3;
+    return current.to.map((cell, index) => ({
+      type: piece.type,
+      col: current.from[index].col + (cell.col - current.from[index].col) * eased,
+      row: current.from[index].row + (cell.row - current.from[index].row) * eased,
+    })).filter(({ row }) => row >= -0.5);
   }
 
   _buildGhostBlocks(game) {
@@ -509,7 +537,7 @@ export class PremiumSceneRenderer {
       visualMaterial.color.set(color);
       this._setEmissiveColor(visualMaterial, color);
       mesh.position.set(block.x, block.y, 7);
-      mesh.scale.set(block.cell * 0.86, block.cell * 0.86, block.cell * 0.14);
+      mesh.scale.set(block.cell * 0.86, block.cell * 0.86, block.cell * 0.6);
       mesh.visible = true;
     });
     for (let index = blocks.length; index < pool.length; index += 1) pool[index].visible = false;
@@ -537,9 +565,15 @@ export class PremiumSceneRenderer {
     this.gridMaterial.opacity = this.settings.glowIntensity > 0 ? (this.boardTheme.gridAlpha || 0.1) : 0.035;
     this._applyBoardTheme();
 
+    const events = this._updateModeWorld(game, meta);
+    this.boardEffects.update(game, events, boardRect, this.settings, this.shapes,
+      this.pieceColors, this.clearEffect?.flashColor || '#85eaff', meta.dt);
+    this._clearingRows = game.clearingRows ? new Set(game.clearingRows) : null;
+    this._clearProgress = Math.min(1, (game.clearTimer || 0) / 220);
+
     const boardBlocks = this._buildBoardBlocks(game);
     this._placeBlocks('board', boardBlocks, boardRect, game.board.cols, game.board.rows, this.pieceColors, 0, 1);
-    const activeBlocks = this._buildPieceBlocks(game.activePiece);
+    const activeBlocks = this._buildPieceBlocks(game.activePiece, meta.dt);
     this._placeBlocks('active', activeBlocks, boardRect, game.board.cols, game.board.rows, this.pieceColors, 8, 1);
     const ghostBlocks = this._buildGhostBlocks(game);
     this._placeBlocks('ghost', ghostBlocks, boardRect, game.board.cols, game.board.rows, this.pieceColors, 4, 0.25);
@@ -551,7 +585,6 @@ export class PremiumSceneRenderer {
 
     this.rimLight.color.set(this.boardTheme.gridColor || '#4dd8ff');
     this.rimLight.intensity = this.settings.glowIntensity * (this.settings.reducedMotion ? 0.45 : 0.8);
-    this._updateModeWorld(game, meta);
     this._applyBloomSettings();
     if (this.composer) this.composer.render();
     else this.renderer.render(this.scene, this.camera);
@@ -583,7 +616,6 @@ export class PremiumSceneRenderer {
     this.settings = {
       ...this.settings,
       ...settings,
-      screenShake: clamp(settings.screenShake, 0, 1, this.settings.screenShake),
       particleIntensity: clamp(settings.particleIntensity, 0, 1, this.settings.particleIntensity),
       glowIntensity: clamp(settings.glowIntensity, 0, 1.5, this.settings.glowIntensity),
     };
@@ -642,6 +674,7 @@ export class PremiumSceneRenderer {
     }
     this.composer?.dispose?.();
     this.bloomPass?.dispose?.();
+    this.boardEffects.dispose();
     this.gridLines.geometry.dispose();
     this.boardBorder.geometry.dispose();
     this.boardBacking.geometry.dispose();

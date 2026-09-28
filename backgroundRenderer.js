@@ -80,7 +80,7 @@ TETRIS.BackgroundRenderer = class BackgroundRenderer {
       const target = Math.max(0, level - 1);
       if (newRun || (game && game.state === TETRIS.GameState.GAME_OVER) || this.reducedMotion) this.altitude = target;
       else if (game && game.state === TETRIS.GameState.PLAYING) {
-        this.altitude += (target - this.altitude) * (1 - Math.exp(-dt / 850));
+        this.altitude += (target - this.altitude) * (1 - Math.exp(-dt / 420));
       }
     } else if (newRun) this.altitude = 0;
 
@@ -282,14 +282,18 @@ TETRIS.BackgroundRenderer = class BackgroundRenderer {
   _endless(color) {
     const h = this.height;
     const level = Math.max(0, this.altitude);
-    const climb = Math.min(1, level / 18);
-    const deep = Math.min(1, Math.max(0, (level - 18) / 30));
-    const skyTop = climb < 0.55 ? '#123a55' : '#030611';
-    const skyMiddle = climb < 0.55 ? '#101a38' : '#080d24';
+    const climb = Math.min(1, level / 7);
+    const deep = Math.min(1, Math.max(0, (level - 7) / 10));
+    const mix = (from, to, amount) => {
+      const a = this.glow.hexToRgb(from), b = this.glow.hexToRgb(to);
+      return `rgb(${Math.round(a.r + (b.r - a.r) * amount)},${Math.round(a.g + (b.g - a.g) * amount)},${Math.round(a.b + (b.b - a.b) * amount)})`;
+    };
+    const skyTop = mix('#123a55', '#030611', climb);
+    const skyMiddle = mix('#101a38', '#080d24', climb);
     this._sky(skyTop, skyMiddle, '#091329');
     this._nebulae(0.12 + climb * 0.1);
     this._stars(Math.floor(this.stars.length * (0.08 + climb * 0.92)), climb);
-    this._city(h * (0.76 + climb * 0.46), Math.pow(1 - climb, 1.3), color);
+    this._city(h * (0.76 + climb * 0.85), Math.pow(1 - climb, 1.3), color);
     this._grid(0.69 + climb * 0.27, color, level * 0.17 + this.reactions.move * 0.08, (1 - climb) * 0.32);
     if (climb > 0.28) {
       const c = this.ctx;

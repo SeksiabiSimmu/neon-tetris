@@ -192,9 +192,7 @@ TETRIS.Renderer = class Renderer {
 
     this.clear(ctx, this.boardWidth, this.boardHeight);
 
-    const shakeOffset = this.effects.getShakeOffset();
     ctx.save();
-    ctx.translate(shakeOffset.x, shakeOffset.y);
 
     const bg = ctx.createLinearGradient(0, 0, 0, this.boardHeight);
     bg.addColorStop(0, this.boardTheme.bgTop);
@@ -216,7 +214,7 @@ TETRIS.Renderer = class Renderer {
       const rowOffset = this.effects.getRowOffset(r, size); // "rows drop into place" after a clear
       for (let c = 0; c < cols; c++) {
         const type = grid[r][c];
-        if (!type) continue;
+        if (!type || this.effects.isDropCellHidden(c, r)) continue;
         this.drawCell(ctx, c * size, r * size + rowOffset, size, this.pieceColors[type], {
           intensity: isClearing ? 1.6 : 0.5,
         });
@@ -235,7 +233,7 @@ TETRIS.Renderer = class Renderer {
         });
       }
 
-      piece.getCells().forEach(({ col, row }) => {
+      this.effects.getVisualPieceCells(piece).forEach(({ col, row }) => {
         if (row < 0) return;
         this.drawCell(ctx, col * size, row * size, size, color, {
           intensity: 1,
@@ -244,6 +242,13 @@ TETRIS.Renderer = class Renderer {
         });
       });
     }
+
+    this.effects.getDropCells().forEach(({ col, row, type }) => {
+      if (row < 0) return;
+      this.drawCell(ctx, col * size, row * size, size, this.pieceColors[type], {
+        intensity: 1.25, chromatic: true,
+      });
+    });
 
     this.effects.drawOverlay(ctx, game, this.boardWidth, size);
 

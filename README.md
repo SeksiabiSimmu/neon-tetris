@@ -34,7 +34,7 @@ Open the local URL printed by Vite. To create a production browser build, run `p
 | Pause or return from a menu | Esc |
 | Restart | R |
 
-Keys can be rebound in Settings. The game also offers colorblind-friendly colors, reduced motion, and adjustable glow, screen shake, and particle intensity. Settings has a separate progression reset; mode records and key bindings remain saved.
+Keys can be rebound in Settings. The game also offers colorblind-friendly colors, reduced motion, and adjustable glow and particle intensity. Settings has a separate progression reset; mode records and key bindings remain saved.
 
 ## Modes
 

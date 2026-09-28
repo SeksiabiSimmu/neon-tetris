@@ -87,7 +87,7 @@ TETRIS.VISUAL = {
 
 // Tuning for the EffectsManager / VFX system specifically — every knob for
 // line-clear choreography, combos, T-spins, perfect clears, level-ups,
-// impacts, and screen shake lives here so it can all be retuned in one
+// and impacts live here so they can all be retuned in one
 // place without touching effectsManager.js itself.
 TETRIS.VFX = {
   // Per-line-count line-clear intensity (Single -> Tetris), 0-1. Scales
@@ -96,30 +96,22 @@ TETRIS.VFX = {
   LINE_CLEAR_PARTICLES_BASE: 10, // × intensity, per cleared row
   LINE_CLEAR_FRAGMENTS_BASE: 6, // × intensity, per cleared row
   LINE_CLEAR_RING_THRESHOLD: 3, // rows cleared at once before a ring appears (Triple+)
-  LINE_CLEAR_SHAKE: { 1: 0, 2: 1.5, 3: 3, 4: 5 }, // px, before combo/perfect-clear add-ons
-  LINE_CLEAR_SHAKE_DURATION_MS: 260,
 
   T_SPIN_COLOR: '#c65bff',
-  T_SPIN_SHAKE: 3,
   T_SPIN_RING_COUNT: 2,
 
   PERFECT_CLEAR_COLOR: '#ffe066',
-  PERFECT_CLEAR_SHAKE: 6,
   PERFECT_CLEAR_RING_COUNT: 4,
   PERFECT_CLEAR_PARTICLES: 140,
 
   COMBO_MAX_TIER_COUNT: 8, // comboCount at which combo bonus effects hit max intensity
-  COMBO_SHAKE_BONUS: 2.5, // px, at max tier
 
-  LEVEL_UP_SHAKE: 4,
   LEVEL_UP_RING_COUNT: 5,
   LEVEL_UP_PARTICLES: 90,
   LEVEL_UP_FLASH_MS: 700,
 
-  HARD_DROP_SHAKE: 1.5,
   LOCK_SETTLE_PARTICLES: 3,
 
-  SHAKE_MAX_PX: 7, // hard safety cap regardless of what triggered it — never nauseating
 
   COLLAPSE_MS: 180, // how long the "rows drop into place" animation takes after a clear
 

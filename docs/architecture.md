@@ -9,7 +9,7 @@ Use this map to open the few files relevant to a change instead of reading the r
 | Unlocks and saves | `progressionData.js`, `progressionManager.js`, `settingsManager.js` | Saved settings, records, and progression have separate storage keys. |
 | Menus and HUD | `uiShell.js`, `src/ui/SettingsPanel.js`, `uiAnimator.js`, `index.html`, `styles.css` | DOM owns keyboard-accessible controls and text. |
 | Canvas fallback | `renderer.js`, `backgroundRenderer.js`, `effectsManager.js` | Keep fallback legible when WebGL is unavailable. |
-| 3D presentation | `src/rendering/PremiumSceneRenderer.js`, `src/rendering/modeWorlds.js` | The scene reads game state; it never changes scoring or collision. |
+| 3D presentation | `src/rendering/PremiumSceneRenderer.js`, `src/rendering/BoardEffects3D.js`, `src/rendering/modeWorlds.js` | The scene reads game state; it never changes scoring or collision. |
 | Gameplay reactions | `src/rendering/gameplaySignals.js` | Canvas and 3D renderers keep independent cursors over the same read-only signals. |
 | Startup and desktop | `src/entry.js`, `main.js`, `desktop/main.cjs`, `vite.config.js` | Vite bundles local assets; Electron loads the built page. |
 

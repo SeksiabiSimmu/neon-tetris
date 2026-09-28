@@ -71,7 +71,8 @@ export function createModeWorld(mode) {
         void main() {
           float horizon = smoothstep(0.0, 1.0, vUv.y);
           vec3 color = mix(uBottom, uTop, horizon);
-          float haze = exp(-abs(vUv.y - 0.24) * 15.0) * (0.035 + uPulse * 0.085);
+          float haze = exp(-abs(vUv.y - (0.24 - uElevation * 0.28)) * 15.0)
+            * (1.0 - uElevation * 0.7) * (0.035 + uPulse * 0.085);
           color += uAccent * haze;
           float vignette = smoothstep(0.9, 0.08, distance(vUv, vec2(0.5, 0.48)));
           color *= 0.76 + vignette * 0.24;
@@ -140,12 +141,14 @@ export function createModeWorld(mode) {
         pulse = 0;
         ringProgress = 1;
         ringMaterial.opacity = 0;
+        altitude = 0;
       }
       lastRunId = game?.runId ?? lastRunId;
 
       const nextAltitude = id === 'endless' ? endlessAltitudeForLevel(game?.scoring?.level) : 0;
-      if (nextAltitude !== altitude) altitude = nextAltitude;
-      progress = id === 'endless' ? 1 - Math.exp(-altitude / 8) : progress;
+      altitude = reducedMotion ? nextAltitude
+        : altitude + (nextAltitude - altitude) * (1 - Math.exp(-dt * 2.4));
+      progress = id === 'endless' ? Math.min(1, altitude / 7) : progress;
       if (palette?.length) {
         const topColor = new THREE.Color(style.top).lerp(new THREE.Color(palette[0]), 0.2);
         const bottomColor = new THREE.Color(style.bottom).lerp(new THREE.Color(palette[palette.length - 1]), 0.16);
@@ -189,11 +192,12 @@ export function createModeWorld(mode) {
         impactRing.visible = ringMaterial.opacity > 0.006;
         environment.rotation.z = Math.sin((elapsedMs + runElapsedMs) * 0.00008) * 0.008;
         stars.position.x = Math.sin(elapsedMs * 0.00004) * 7;
+        stars.position.y = id === 'endless' ? -altitude * 24 : 0;
       }
 
       landmark.update?.({ time: elapsedMs / 1000, progress, altitude, pulse, reducedMotion });
 
-      stars.material.opacity = 0.86 * particleIntensity;
+      stars.material.opacity = (id === 'endless' ? 0.18 + progress * 0.68 : 0.86) * particleIntensity;
       stars.visible = particleIntensity > 0;
       pulseLight.intensity = reducedMotion ? 0 : pulse * glowIntensity * 1.8;
       background.material.uniforms.uTime.value = reducedMotion ? 0 : elapsedMs / 1000;
@@ -395,18 +399,23 @@ function makeLandmark(id, accent) {
   let planet = null;
   let core = null;
   let reactorRings = [];
+  const ascentObjects = [];
+  let moonRing = null;
 
   if (id === 'endless') {
     const groundMat = solid('#10252f', 0.96);
     horizon = mesh(new THREE.BoxGeometry(2400, 150, 4), groundMat, 0, -295, -170);
+    ascentObjects.push(horizon);
     for (let i = 0; i < 13; i += 1) {
       const x = -1000 + i * 166;
       const height = 25 + ((i * 47) % 105);
       const spire = mesh(new THREE.ConeGeometry(25 + (i % 4) * 9, height, 5), solid(i % 2 ? '#16303b' : '#1d3943', 0.93), x, -218 + height * 0.38, -168 + (i % 3) * 2);
+      ascentObjects.push(spire);
       animated.push({ object: spire, phase: i * 0.8, range: 0.012 });
     }
     moon = mesh(new THREE.SphereGeometry(148, 32, 24), solid('#304e70', 0.55), 510, 245, -175);
-    ring(212, 4, 510, 245, -174, wire(0.28)).rotation.x = 1.22;
+    moonRing = ring(212, 4, 510, 245, -174, wire(0.28));
+    moonRing.rotation.x = 1.22;
     planet = moon;
   } else if (id === 'sprint') {
     for (let side = -1; side <= 1; side += 2) {
@@ -467,12 +476,20 @@ function makeLandmark(id, accent) {
         object.rotation.y = Math.cos(time * 0.24 + phase) * range;
       });
       if (id === 'endless') {
-        const ascent = Math.min(1, progress * 1.12);
-        if (horizon) horizon.position.y = -255 - ascent * 260;
+        const ascent = Math.min(1, progress);
+        ascentObjects.forEach((object) => {
+          object.position.y = object.userData.baseY ??= object.position.y;
+          object.position.y -= Math.min(altitude * 110, 900);
+          object.material.opacity = Math.max(0, (object.userData.baseOpacity ??= object.material.opacity) * (1 - ascent * 1.15));
+        });
         if (planet) {
-          planet.position.y = 245 - ascent * 420;
-          planet.scale.setScalar(1 - ascent * 0.18);
-          planet.material.opacity = 0.55 - ascent * 0.18;
+          planet.position.y = 245 - Math.min(altitude * 86, 760);
+          planet.scale.setScalar(1 + ascent * 0.36);
+          planet.material.opacity = 0.55 + ascent * 0.15;
+          if (moonRing) {
+            moonRing.position.y = planet.position.y;
+            moonRing.scale.setScalar(1 + ascent * 0.36);
+          }
         }
       }
       if (core && !reducedMotion) {

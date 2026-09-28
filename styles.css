@@ -17,13 +17,6 @@
   --font-display: 'Chakra Petch', 'Segoe UI', system-ui, -apple-system, sans-serif;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  * {
-    animation-duration: 0.001ms !important;
-    transition-duration: 0.001ms !important;
-  }
-}
-
 .reduced-motion *,
 .reduced-motion *::before,
 .reduced-motion *::after {
@@ -275,6 +268,16 @@ canvas#next-canvas {
   border-color: rgba(255, 138, 77, 0.7);
   color: #ff9a4d;
   box-shadow: 0 0 calc(26px * var(--glow-scale, 1)) color-mix(in srgb, #ff8a4d var(--glow-opacity, 100%), transparent);
+}
+
+.hud-badge--combo.combo-pop {
+  animation: combo-pop 420ms cubic-bezier(0.18, 0.8, 0.26, 1) both;
+}
+
+@keyframes combo-pop {
+  0% { transform: translateY(8px) scale(0.74); filter: brightness(1.8); }
+  42% { transform: translateY(-3px) scale(1.16); filter: brightness(1.45); }
+  100% { transform: translateY(0) scale(1); filter: brightness(1); }
 }
 
 .hud-badge--b2b {

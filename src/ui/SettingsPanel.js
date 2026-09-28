@@ -20,7 +20,7 @@ export class SettingsPanel {
     const settings = this.settings;
     const apply = () => settings.applyTo({ renderer: this.renderer, input: this.input, audio: this.audio });
 
-    ['masterVolume', 'sfxVolume', 'glowIntensity', 'screenShake', 'particleIntensity'].forEach((key) => {
+    ['masterVolume', 'sfxVolume', 'glowIntensity', 'particleIntensity'].forEach((key) => {
       const control = document.getElementById(`setting-${key}`);
       control.addEventListener('input', (event) => {
         settings.set(key, key === 'glowIntensity' ? Number(event.target.value) / 100 : Number(event.target.value), false);
@@ -92,7 +92,6 @@ export class SettingsPanel {
     document.getElementById('setting-masterVolume').value = values.masterVolume;
     document.getElementById('setting-sfxVolume').value = values.sfxVolume;
     document.getElementById('setting-glowIntensity').value = Math.round(values.glowIntensity * 100);
-    document.getElementById('setting-screenShake').value = values.screenShake;
     document.getElementById('setting-particleIntensity').value = values.particleIntensity;
     document.getElementById('setting-graphicsQuality').value = values.graphicsQuality;
     document.getElementById('setting-reducedMotion').checked = values.reducedMotion;
