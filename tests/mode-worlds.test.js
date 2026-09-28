@@ -23,6 +23,29 @@ test('Endless altitude starts at the surface and rises once per valid level', ()
   }
 });
 
+test('Endless visibly ascends toward space as levels increase', () => {
+  const world = createModeWorld('endless');
+  let ground = null;
+  let stars = null;
+  world.group.traverse((object) => {
+    if (object.geometry?.parameters?.width === 2400) ground = object;
+    if (object.isPoints) stars = object;
+  });
+  const game = { runId: 1, scoring: { level: 1 } };
+  world.update({ dtMs: 16, game });
+  const startY = ground.position.y;
+  const startStars = stars.material.opacity;
+  game.scoring.level = 2;
+  for (let frame = 0; frame < 40; frame += 1) world.update({ dtMs: 50, game });
+  assert.ok(ground.position.y < startY - 100);
+  assert.ok(stars.material.opacity > startStars);
+  game.scoring.level = 8;
+  for (let frame = 0; frame < 40; frame += 1) world.update({ dtMs: 50, game });
+  const background = world.group.children.find((object) => object.material?.uniforms?.uElevation);
+  assert.ok(background.material.uniforms.uElevation.value > 0.9);
+  world.dispose();
+});
+
 test('clear effect shapes change the 3D impact ring geometry', () => {
   const world = createModeWorld('endless');
   const impactRing = world.group.getObjectByName('clear-impact-ring');

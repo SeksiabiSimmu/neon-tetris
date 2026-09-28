@@ -579,6 +579,7 @@ kbd {
   -webkit-backdrop-filter: blur(20px) saturate(140%);
   opacity: 0;
   visibility: hidden;
+  pointer-events: none;
   transform: scale(1.02);
   transition: opacity 0.28s ease, transform 0.28s ease, visibility 0s linear 0.28s;
   overflow-y: auto;
@@ -587,6 +588,7 @@ kbd {
 .screen.active {
   opacity: 1;
   visibility: visible;
+  pointer-events: auto;
   transform: scale(1);
   transition: opacity 0.28s ease, transform 0.28s ease, visibility 0s linear 0s;
 }

@@ -469,7 +469,7 @@ function makeLandmark(id, accent) {
 
   return {
     group,
-    update({ time = 0, progress = 0, reducedMotion = false }) {
+    update({ time = 0, progress = 0, altitude = 0, reducedMotion = false }) {
       animated.forEach(({ object, phase, range }) => {
         if (reducedMotion) return;
         object.rotation.x = Math.sin(time * 0.36 + phase) * range;

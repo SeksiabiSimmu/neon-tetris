@@ -16,6 +16,14 @@ function makeRenderer(settingsCalls) {
   return renderer;
 }
 
+test('Reduced Motion starts off even when the operating system requests it', () => {
+  const app = loadLegacyContext('constants.js', 'settingsManager.js');
+  app.matchMedia = () => ({ matches: true });
+  const settings = new app.TETRIS.SettingsManager();
+  assert.equal(settings.get('reducedMotion'), false);
+  assert.equal(Object.hasOwn(settings.values, 'screenShake'), false);
+});
+
 test('forwards normalized visual settings and zeros motion-controlled effects', () => {
   const app = loadLegacyContext('constants.js', 'settingsManager.js');
   const settings = Object.create(app.TETRIS.SettingsManager.prototype);
