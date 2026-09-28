@@ -8,7 +8,7 @@ For code ownership and dependency boundaries, see [the architecture map](docs/ar
 
 ## Play on Windows
 
-Download `NeonTetris-1.0.0-win-x64.exe` from the [latest GitHub release](https://github.com/SeksiabiSimmu/neon-tetris/releases/latest) and run it. This is a portable Windows x64 application; it does not need an installer. Progress and settings are saved for the current Windows user. An unsigned build may show a Windows reputation prompt.
+Download `NeonTetris-1.1.0-win-x64.exe` from the [latest GitHub release](https://github.com/SeksiabiSimmu/neon-tetris/releases/latest) and run it. This is a portable Windows x64 application; it does not need an installer. Progress and settings are saved for the current Windows user. An unsigned build may show a Windows reputation prompt.
 
 ## Run from source
 
