@@ -17,6 +17,8 @@ TETRIS.SettingsManager = class SettingsManager {
       reducedMotion: false,
       colorblindMode: false,
       graphicsQuality: 'high', // 'low' | 'medium' | 'high'
+      background3D: true,
+      ambientOcclusion: false,
       keyBindings: null,
     };
   }
@@ -46,7 +48,7 @@ TETRIS.SettingsManager = class SettingsManager {
     }
     if (key === 'graphicsQuality') return ['low', 'medium', 'high'].includes(value) ? value : 'high';
     if (key === 'keyBindings') return this._normalizeBindings(value);
-    if (key === 'reducedMotion' || key === 'colorblindMode') return value === true;
+    if (['reducedMotion', 'colorblindMode', 'background3D', 'ambientOcclusion'].includes(key)) return value === true;
     return this._defaults()[key];
   }
 
@@ -113,6 +115,9 @@ TETRIS.SettingsManager = class SettingsManager {
         colorblindMode: v.colorblindMode,
         particleIntensity: v.reducedMotion ? 0 : v.particleIntensity / 100,
         glowIntensity: v.glowIntensity * this._qualityScale(v.graphicsQuality),
+        graphicsQuality: v.graphicsQuality,
+        background3D: v.background3D,
+        ambientOcclusion: v.ambientOcclusion,
       });
     }
     if (input) input.setKeyBindings(v.keyBindings || input.defaultKeyMap);

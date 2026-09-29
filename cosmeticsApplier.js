@@ -17,11 +17,14 @@ TETRIS.applyCosmetics = function applyCosmetics(renderer, progression) {
   const blockMaterial = progression.getAppliedData('blockMaterials');
   if (blockMaterial) renderer.setBlockMaterial(blockMaterial);
 
+  const fallingEffect = progression.getAppliedData('fallingEffects');
+  if (fallingEffect) renderer.setFallingEffect(fallingEffect.effectId);
+
   const boardTheme = progression.getAppliedData('boardThemes');
   if (boardTheme) renderer.setBoardTheme(boardTheme);
 
   const background = progression.getAppliedData('backgrounds');
-  if (background) renderer.setBackgroundPalette(background.nebulaColors, background.style);
+  if (background) renderer.setBackgroundPalette(background.nebulaColors, background.style, background.sceneId);
 
   const particles = progression.getAppliedData('particleEffects');
   if (particles) renderer.setAmbientParticles(particles.ambientColors, particles.shape);

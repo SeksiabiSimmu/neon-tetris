@@ -21,8 +21,10 @@
 // `apply` holds the actual values the cosmetics applier pushes into the
 // renderer when an item is equipped — shape depends on category:
 //   pieceSkins:     { colors: { I,O,T,S,Z,J,L } }         (7-color palette)
+//   blockMaterials: { family, roughness, metalness, clearcoat, emissiveIntensity }
+//   fallingEffects: { effectId }                          (piece trail and landing)
 //   boardThemes:    { bgTop, bgBottom, gridColor, gridAlpha }
-//   backgrounds:    { nebulaColors: [...], style }         (palette + animated overlay)
+//   backgrounds:    { nebulaColors: [...], style, sceneId? } (palette or 3D place)
 //   particleEffects:{ ambientColors: [...], shape }        (spark/fragment/ring/hex/triangle)
 //   clearEffects:   { flashColor, accentColor, particleShape }
 //   uiThemes:       { accent, accentDim }                  (CSS custom properties)
@@ -40,7 +42,7 @@ TETRIS.PROGRESSION_DATA = {
   // score climbs rather than only at game over (see ProgressionManager).
   XP_PER_SCORE_POINT: 10,
 
-  CATEGORIES: ['pieceSkins', 'blockMaterials', 'boardThemes', 'backgrounds', 'particleEffects', 'clearEffects', 'uiThemes'],
+  CATEGORIES: ['pieceSkins', 'blockMaterials', 'fallingEffects', 'boardThemes', 'backgrounds', 'particleEffects', 'clearEffects', 'uiThemes'],
 
   UNLOCKABLES: [
     // --- piece skins ---
@@ -70,6 +72,72 @@ TETRIS.PROGRESSION_DATA = {
       apply: { family: 'prism-shell', roughness: 0.14, metalness: 0.64, clearcoat: 1, emissiveIntensity: 0.28, emissiveAccent: '#ffe38b' } },
     { id: 'material_void_chrome', category: 'blockMaterials', name: 'Void Chrome', preview: '#6e84ff', requirement: { type: 'achievement', id: 'ach_combo_20' },
       apply: { family: 'void-chrome', roughness: 0.06, metalness: 1, clearcoat: 0.88, emissiveIntensity: 0.3, emissiveAccent: '#8495ff' } },
+    { id: 'material_stained_glass', category: 'blockMaterials', name: 'Stained Glass', preview: '#c7a78b', description: 'Colored panes held by dark leading, with a clear solid silhouette.', requirement: { type: 'default' },
+      apply: { family: 'stained-glass', roughness: 0.16, metalness: 0.12, clearcoat: 0.96, emissiveIntensity: 0.11, emissiveAccent: '#ecd0ac' } },
+    { id: 'material_reactor_cells', category: 'blockMaterials', name: 'Reactor Cells', preview: '#8ebc97', description: 'Armored frames around controlled energy cores and precise seams.', requirement: { type: 'level', value: 3 },
+      apply: { family: 'reactor-cells', roughness: 0.38, metalness: 0.68, clearcoat: 0.42, emissiveIntensity: 0.22, emissiveAccent: '#b6e7ba' } },
+    { id: 'material_porcelain_dynasty', category: 'blockMaterials', name: 'Porcelain Dynasty', preview: '#b9d5de', description: 'Glazed ceramic, fine motifs, and selective gold repairs.', requirement: { type: 'stat', stat: 'totalLines', value: 30 },
+      apply: { family: 'porcelain-dynasty', roughness: 0.22, metalness: 0.07, clearcoat: 0.94, emissiveIntensity: 0.07, emissiveAccent: '#f2ddaa' } },
+    { id: 'material_pocket_gardens', category: 'blockMaterials', name: 'Pocket Gardens', preview: '#90ad7d', description: 'Small moss and stone arrangements within clean colored borders.', requirement: { type: 'stat', stat: 'gamesPlayed', value: 5 },
+      apply: { family: 'pocket-gardens', roughness: 0.67, metalness: 0.06, clearcoat: 0.16, emissiveIntensity: 0.04, emissiveAccent: '#bad6a2' } },
+    { id: 'material_comic_ink', category: 'blockMaterials', name: 'Comic Ink', preview: '#f2c879', description: 'Printed halftone faces and decisive inked outlines.', requirement: { type: 'default' },
+      apply: { family: 'comic-ink', roughness: 0.75, metalness: 0, clearcoat: 0.04, emissiveIntensity: 0.03, emissiveAccent: '#fff4de' } },
+    { id: 'material_deep_sea_relics', category: 'blockMaterials', name: 'Deep-Sea Relics', preview: '#87aaa4', description: 'Weathered marine ceramic with etched currents and restrained mineral cracks.', requirement: { type: 'level', value: 5 },
+      apply: { family: 'deep-sea-relics', roughness: 0.74, metalness: 0.06, clearcoat: 0.25, emissiveIntensity: 0.08, emissiveAccent: '#a3d7d3' } },
+    { id: 'material_meteorite', category: 'blockMaterials', name: 'Meteorite', preview: '#aa8878', description: 'Pitted stone, colored mineral veins, and a softly heated rim.', requirement: { type: 'stat', stat: 'totalPiecesPlaced', value: 100 },
+      apply: { family: 'meteorite', roughness: 0.91, metalness: 0.14, clearcoat: 0.08, emissiveIntensity: 0.1, emissiveAccent: '#f1a477' } },
+    { id: 'material_aurora_crystal', category: 'blockMaterials', name: 'Aurora Crystal', preview: '#aec8c5', description: 'Frosted crystal faces with slow internal ribbons of color.', requirement: { type: 'level', value: 6 },
+      apply: { family: 'aurora-crystal', roughness: 0.26, metalness: 0.1, clearcoat: 0.82, emissiveIntensity: 0.1, emissiveAccent: '#b4dfe3' } },
+    { id: 'material_building_bricks', category: 'blockMaterials', name: 'Building Bricks', preview: '#d4af80', description: 'Molded plastic studs, crisp seams, and subtle surface scratches.', requirement: { type: 'stat', stat: 'totalLines', value: 55 },
+      apply: { family: 'building-bricks', roughness: 0.42, metalness: 0, clearcoat: 0.35, emissiveIntensity: 0.02, emissiveAccent: '#e9d3ad' } },
+    { id: 'material_jelly_cubes', category: 'blockMaterials', name: 'Jelly Cubes', preview: '#d6a2b8', description: 'Soft translucent-looking cells with a contained settling motion.', requirement: { type: 'stat', stat: 'gamesPlayed', value: 8 },
+      apply: { family: 'jelly-cubes', roughness: 0.15, metalness: 0, clearcoat: 1, emissiveIntensity: 0.07, emissiveAccent: '#f5bfd0' } },
+    { id: 'material_arcade_carpet', category: 'blockMaterials', name: 'Arcade Carpet', preview: '#967993', description: 'Tactile woven fabric with restrained printed geometric motifs.', requirement: { type: 'level', value: 7 },
+      apply: { family: 'arcade-carpet', roughness: 1, metalness: 0, clearcoat: 0, emissiveIntensity: 0, emissiveAccent: '#b39ba8' } },
+    { id: 'material_tiny_aquariums', category: 'blockMaterials', name: 'Tiny Aquariums', preview: '#7aabb1', description: 'Miniature aquatic scenes inside sturdy colored cell frames.', requirement: { type: 'stat', stat: 'totalTetrises', value: 3 },
+      apply: { family: 'tiny-aquariums', roughness: 0.2, metalness: 0.16, clearcoat: 0.9, emissiveIntensity: 0.08, emissiveAccent: '#a8d9dd' } },
+    { id: 'material_toy_blocks', category: 'blockMaterials', name: 'Toy Blocks', preview: '#bca285', description: 'Painted wood with visible grain, worn corners, and small stamps.', requirement: { type: 'stat', stat: 'totalPiecesPlaced', value: 250 },
+      apply: { family: 'toy-blocks', roughness: 0.82, metalness: 0, clearcoat: 0.08, emissiveIntensity: 0, emissiveAccent: '#d8bb95' } },
+    { id: 'material_circuit_boards', category: 'blockMaterials', name: 'Circuit Boards', preview: '#76ad9e', description: 'Fine metallic traces with a short signal response on clears.', requirement: { type: 'achievement', id: 'ach_first_tspin' },
+      apply: { family: 'circuit-boards', roughness: 0.54, metalness: 0.45, clearcoat: 0.35, emissiveIntensity: 0.08, emissiveAccent: '#a8d6bd' } },
+    { id: 'material_space_freight', category: 'blockMaterials', name: 'Space Freight', preview: '#aeb5b4', description: 'Ribbed cargo panels, fasteners, and colored structural markings.', requirement: { type: 'level', value: 8 },
+      apply: { family: 'space-freight', roughness: 0.6, metalness: 0.63, clearcoat: 0.12, emissiveIntensity: 0.02, emissiveAccent: '#c8d0ca' } },
+    { id: 'material_mechanical_keys', category: 'blockMaterials', name: 'Mechanical Keys', preview: '#aab2b8', description: 'Sculpted keycaps, subtle legends, and a brief lock response.', requirement: { type: 'stat', stat: 'bestCombo', value: 5 },
+      apply: { family: 'mechanical-keys', roughness: 0.54, metalness: 0.08, clearcoat: 0.28, emissiveIntensity: 0.03, emissiveAccent: '#d9dee0' } },
+    { id: 'material_retro_displays', category: 'blockMaterials', name: 'Retro Displays', preview: '#91b5a4', description: 'Controlled phosphor faces with subtle display scanlines.', requirement: { type: 'stat', stat: 'totalLines', value: 110 },
+      apply: { family: 'retro-displays', roughness: 0.32, metalness: 0.14, clearcoat: 0.64, emissiveIntensity: 0.11, emissiveAccent: '#b2d4b4' } },
+    { id: 'material_black_ice', category: 'blockMaterials', name: 'Black Ice', preview: '#728c9b', description: 'Dark polished ice crossed by recognizable colored fractures.', requirement: { type: 'level', value: 9 },
+      apply: { family: 'black-ice', roughness: 0.12, metalness: 0.08, clearcoat: 0.95, emissiveIntensity: 0.08, emissiveAccent: '#9bc8d8' } },
+    { id: 'material_dungeon_treasure', category: 'blockMaterials', name: 'Dungeon Treasure', preview: '#bc9c68', description: 'Engraved enamel and metal with selective gem details.', requirement: { type: 'achievement', id: 'ach_perfect_clear' },
+      apply: { family: 'dungeon-treasure', roughness: 0.28, metalness: 0.67, clearcoat: 0.62, emissiveIntensity: 0.08, emissiveAccent: '#ebd093' } },
+    { id: 'material_cosmic_windows', category: 'blockMaterials', name: 'Cosmic Windows', preview: '#9b9fc8', description: 'Crisp solid frames containing restrained distant space imagery.', requirement: { type: 'level', value: 10 },
+      apply: { family: 'cosmic-windows', roughness: 0.22, metalness: 0.38, clearcoat: 0.82, emissiveIntensity: 0.08, emissiveAccent: '#c4c4e8' } },
+
+    // --- movement-driven falling effects, independent of ambient particles ---
+    { id: 'fall_none', category: 'fallingEffects', name: 'None', preview: '#8f9aa1', description: 'A clean piece silhouette without a movement trail.', requirement: { type: 'default' },
+      apply: { effectId: 'none' } },
+    { id: 'fall_fire', category: 'fallingEffects', name: 'Fire', preview: '#e8a464', description: 'Small rising flames leave a few embers on landing.', requirement: { type: 'level', value: 2 },
+      apply: { effectId: 'fire' } },
+    { id: 'fall_bubbles', category: 'fallingEffects', name: 'Bubbles', preview: '#8bb9c4', description: 'Air rings float away from falling pieces and disperse on landing.', requirement: { type: 'default' },
+      apply: { effectId: 'bubbles' } },
+    { id: 'fall_water', category: 'fallingEffects', name: 'Water', preview: '#83adcb', description: 'A short droplet trail ends in a shallow edge splash.', requirement: { type: 'stat', stat: 'totalLines', value: 20 },
+      apply: { effectId: 'water' } },
+    { id: 'fall_smoke', category: 'fallingEffects', name: 'Smoke', preview: '#a8a2a1', description: 'Thin, quickly fading wisps and a soft contact puff.', requirement: { type: 'stat', stat: 'gamesPlayed', value: 4 },
+      apply: { effectId: 'smoke' } },
+    { id: 'fall_frost', category: 'fallingEffects', name: 'Frost', preview: '#b1d4dd', description: 'Fine ice crystals and a brief frost outline at rest.', requirement: { type: 'level', value: 4 },
+      apply: { effectId: 'frost' } },
+    { id: 'fall_lightning', category: 'fallingEffects', name: 'Lightning', preview: '#e4dd9a', description: 'Quick arcs between cells and one short landing pulse.', requirement: { type: 'stat', stat: 'totalTSpins', value: 3 },
+      apply: { effectId: 'lightning' } },
+    { id: 'fall_lava', category: 'fallingEffects', name: 'Lava', preview: '#d88764', description: 'Molten droplets cool into a few sparks on contact.', requirement: { type: 'level', value: 5 }, apply: { effectId: 'lava' } },
+    { id: 'fall_wind', category: 'fallingEffects', name: 'Wind', preview: '#a8c4bb', description: 'Fine curved streaks finish in a short outward gust.', requirement: { type: 'stat', stat: 'totalLines', value: 50 }, apply: { effectId: 'wind' } },
+    { id: 'fall_stardust', category: 'fallingEffects', name: 'Stardust', preview: '#d4c7a1', description: 'Small stars settle into a brief landing constellation.', requirement: { type: 'level', value: 6 }, apply: { effectId: 'stardust' } },
+    { id: 'fall_cherry_blossoms', category: 'fallingEffects', name: 'Cherry Blossoms', preview: '#dbaab5', description: 'A few tumbling petals scatter as the piece lands.', requirement: { type: 'stat', stat: 'gamesPlayed', value: 10 }, apply: { effectId: 'cherry-blossoms' } },
+    { id: 'fall_digital_glitch', category: 'fallingEffects', name: 'Digital Glitch', preview: '#9da8bf', description: 'Brief pixel fragments trail motion without obscuring the board.', requirement: { type: 'stat', stat: 'bestCombo', value: 7 }, apply: { effectId: 'digital-glitch' } },
+    { id: 'fall_ink', category: 'fallingEffects', name: 'Ink', preview: '#858d98', description: 'Short brush-like strokes and a contained landing splatter.', requirement: { type: 'stat', stat: 'totalPiecesPlaced', value: 500 }, apply: { effectId: 'ink' } },
+    { id: 'fall_fireflies', category: 'fallingEffects', name: 'Fireflies', preview: '#c5c88a', description: 'Sparse warm followers disperse when the piece locks.', requirement: { type: 'level', value: 7 }, apply: { effectId: 'fireflies' } },
+    { id: 'fall_soap_film', category: 'fallingEffects', name: 'Soap Film', preview: '#acc1c1', description: 'Iridescent edge bubbles stretch and pop after landing.', requirement: { type: 'stat', stat: 'totalTetrises', value: 6 }, apply: { effectId: 'soap-film' } },
+    { id: 'fall_autumn_leaves', category: 'fallingEffects', name: 'Autumn Leaves', preview: '#bd9a6c', description: 'Small leaves drift around the falling piece and settle quickly.', requirement: { type: 'level', value: 8 }, apply: { effectId: 'autumn-leaves' } },
+    { id: 'fall_comet', category: 'fallingEffects', name: 'Comet', preview: '#a7c1d0', description: 'A tapered trail intensifies during a hard drop.', requirement: { type: 'achievement', id: 'ach_tetris_10' }, apply: { effectId: 'comet' } },
 
     // --- board themes ---
     { id: 'board_deepspace', category: 'boardThemes', name: 'Deep Space', preview: '#0d1220', requirement: { type: 'default' },
@@ -100,6 +168,30 @@ TETRIS.PROGRESSION_DATA = {
       apply: { nebulaColors: ['#b5e8ff', '#7c9cff', '#ffffff', '#ffca8a'], style: 'meteors' } },
     { id: 'bg_clockwork', category: 'backgrounds', name: 'Clockwork Orbit', preview: '#f0bd69', requirement: { type: 'achievement', id: 'ach_tetris_10' },
       apply: { nebulaColors: ['#f0bd69', '#8cd9ff', '#e2a5ff', '#fff0b0'], style: 'clockwork' } },
+    { id: 'bg_japanese_courtyard', category: 'backgrounds', name: 'Japanese Courtyard', preview: '#9dac88', description: 'Weathered timber, planted stone, and quiet daylight around a garden focal point.', requirement: { type: 'default' },
+      apply: { nebulaColors: ['#b8c7aa', '#9aaa87', '#dcc9aa'], style: 'nebula', sceneId: 'japanese-courtyard' } },
+    { id: 'bg_rainy_observatory', category: 'backgrounds', name: 'Rainy Observatory', preview: '#829ba5', description: 'A brass telescope and warm interior beneath a rain-washed glass dome.', requirement: { type: 'level', value: 3 },
+      apply: { nebulaColors: ['#879eae', '#d2b381', '#455a70'], style: 'aurora', sceneId: 'rainy-observatory' } },
+    { id: 'bg_desert_monument', category: 'backgrounds', name: 'Desert Monument', preview: '#d0a477', description: 'Layered sandstone architecture in late light above distant dunes.', requirement: { type: 'stat', stat: 'totalPiecesPlaced', value: 60 },
+      apply: { nebulaColors: ['#d6a77b', '#a66b55', '#e6c599'], style: 'solar', sceneId: 'desert-monument' } },
+    { id: 'bg_underwater_ruins', category: 'backgrounds', name: 'Underwater Ruins', preview: '#729e9d', description: 'Submerged masonry, selective growth, and filtered ocean light.', requirement: { type: 'stat', stat: 'totalLines', value: 40 },
+      apply: { nebulaColors: ['#7aafb2', '#3e737f', '#b1c3a2'], style: 'aurora', sceneId: 'underwater-ruins' } },
+    { id: 'bg_lunar_outpost', category: 'backgrounds', name: 'Lunar Outpost', preview: '#acb5b8', description: 'A practical scientific station above craters with distant Earth.', requirement: { type: 'level', value: 5 },
+      apply: { nebulaColors: ['#a9b9c2', '#687b91', '#d4bda3'], style: 'orbit', sceneId: 'lunar-outpost' } },
+    { id: 'bg_alpine_retreat', category: 'backgrounds', name: 'Alpine Retreat', preview: '#b5b5a5', description: 'Warm timber shelter, a quiet hearth, and snowfall beyond mountain windows.', requirement: { type: 'level', value: 6 },
+      apply: { nebulaColors: ['#c8d6d6', '#899da6', '#d8b88b'], style: 'aurora', sceneId: 'alpine-retreat' } },
+    { id: 'bg_cloud_sanctuary', category: 'backgrounds', name: 'Cloud Sanctuary', preview: '#c3c7bb', description: 'Pale stone terraces and suspended fabric above layered clouds.', requirement: { type: 'stat', stat: 'totalLines', value: 75 },
+      apply: { nebulaColors: ['#d1d4c8', '#aab9c2', '#d5bd9e'], style: 'nebula', sceneId: 'cloud-sanctuary' } },
+    { id: 'bg_autumn_library', category: 'backgrounds', name: 'Autumn Library', preview: '#aa8567', description: 'Carved shelving, books, leather, and golden window light.', requirement: { type: 'stat', stat: 'totalPiecesPlaced', value: 400 },
+      apply: { nebulaColors: ['#c09a70', '#6e5549', '#d5b88c'], style: 'solar', sceneId: 'autumn-library' } },
+    { id: 'bg_volcanic_coast', category: 'backgrounds', name: 'Volcanic Coast', preview: '#847474', description: 'Black-rock cliffs frame ocean depth, distant lava, and drifting steam.', requirement: { type: 'level', value: 8 },
+      apply: { nebulaColors: ['#9b7c74', '#475d68', '#d39a75'], style: 'solar', sceneId: 'volcanic-coast' } },
+    { id: 'bg_paper_landscape', category: 'backgrounds', name: 'Paper Landscape', preview: '#cfbfa8', description: 'Folded paper forms, layered cut edges, and gentle suspended motion.', requirement: { type: 'stat', stat: 'gamesPlayed', value: 15 },
+      apply: { nebulaColors: ['#e5d6ba', '#b1c0b7', '#cda68d'], style: 'prism', sceneId: 'paper-landscape' } },
+    { id: 'bg_clockmakers_workshop', category: 'backgrounds', name: "Clockmaker's Workshop", preview: '#b09875', description: 'Slow coherent mechanisms among brass, wood, enamel, and tools.', requirement: { type: 'stat', stat: 'totalTetrises', value: 8 },
+      apply: { nebulaColors: ['#b9a27d', '#6e6f6b', '#d5b684'], style: 'clockwork', sceneId: 'clockmakers-workshop' } },
+    { id: 'bg_rainforest_temple', category: 'backgrounds', name: 'Rainforest Temple', preview: '#7a9a7c', description: 'Weathered temple architecture beneath roots, water, and canopy light.', requirement: { type: 'level', value: 10 },
+      apply: { nebulaColors: ['#8da98b', '#456a64', '#b7b78f'], style: 'aurora', sceneId: 'rainforest-temple' } },
 
     // --- particle effects ---
     { id: 'particles_sparks', category: 'particleEffects', name: 'Sparks', preview: '#4dd8ff', requirement: { type: 'default' },

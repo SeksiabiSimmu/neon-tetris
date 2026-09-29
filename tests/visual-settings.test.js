@@ -30,7 +30,8 @@ test('forwards normalized visual settings and zeros motion-controlled effects', 
   const calls = [];
   settings.values = {
     masterVolume: 80, sfxVolume: 80, particleIntensity: 0,
-    glowIntensity: 0, reducedMotion: true, colorblindMode: true, graphicsQuality: 'low', keyBindings: null,
+    glowIntensity: 0, reducedMotion: true, colorblindMode: true, graphicsQuality: 'low',
+    background3D: false, ambientOcclusion: false, keyBindings: null,
   };
   const renderer = makeRenderer(calls);
   settings.applyTo({ renderer, input: { defaultKeyMap: {}, setKeyBindings() {} }, audio: { setVolumes() {} } });
@@ -40,6 +41,9 @@ test('forwards normalized visual settings and zeros motion-controlled effects', 
     colorblindMode: true,
     particleIntensity: 0,
     glowIntensity: 0,
+    graphicsQuality: 'low',
+    background3D: false,
+    ambientOcclusion: false,
   }]);
   assert.equal(renderer.effects.reducedMotion, true);
   assert.equal(renderer.boardParticles.enabled, false);
@@ -51,7 +55,8 @@ test("maps effect sliders to the renderer's normalized range and honors graphics
   const calls = [];
   settings.values = {
     masterVolume: 80, sfxVolume: 80, particleIntensity: 60,
-    glowIntensity: 1.2, reducedMotion: false, colorblindMode: false, graphicsQuality: 'medium', keyBindings: null,
+    glowIntensity: 1.2, reducedMotion: false, colorblindMode: false, graphicsQuality: 'medium',
+    background3D: true, ambientOcclusion: true, keyBindings: null,
   };
   settings.applyTo({
     renderer: makeRenderer(calls),
@@ -69,7 +74,8 @@ test('sets zero-glow CSS variables so interface glows can be fully disabled', ()
   app.document.documentElement.style.setProperty = (key, value) => { cssVariables[key] = value; };
   settings.values = {
     masterVolume: 80, sfxVolume: 80, particleIntensity: 80,
-    glowIntensity: 0, reducedMotion: false, colorblindMode: false, graphicsQuality: 'high', keyBindings: null,
+    glowIntensity: 0, reducedMotion: false, colorblindMode: false, graphicsQuality: 'high',
+    background3D: true, ambientOcclusion: true, keyBindings: null,
   };
   settings.applyTo({
     renderer: makeRenderer([]),

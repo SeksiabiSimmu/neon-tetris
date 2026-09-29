@@ -1,12 +1,16 @@
 import * as THREE from 'three';
+import { createAscentLandmark } from './architecturalAscent.js';
+import { createSculpturalModeLandmark } from './sculpturalModeLandmarks.js';
+import { WORLD_LIGHTING, tintSky } from './worldLighting.js';
+import { createCollectionWorld } from './collectionWorlds.js';
 
 const MODE_STYLE = {
-  endless: { landmark: 'A planetary ascent from a glowing surface to deep space.', top: '#071022', bottom: '#1a3948', accent: '#50e3c2' },
-  sprint: { landmark: 'A high-speed transit corridor with converging light rails.', top: '#071227', bottom: '#102d4c', accent: '#42d9ff' },
-  marathon: { landmark: 'A monumental orbital ring around a distant world.', top: '#0b1025', bottom: '#24203e', accent: '#b487ff' },
-  timeAttack: { landmark: 'A charged reactor chamber with pulsing concentric rings.', top: '#130d20', bottom: '#32142d', accent: '#ff5a98' },
-  zen: { landmark: 'A calm bioluminescent garden beneath a soft aurora.', top: '#071a25', bottom: '#10382f', accent: '#74f0ba' },
-  challenge: { landmark: 'A geometric arena framed by shifting crystal forms.', top: '#101022', bottom: '#27224a', accent: '#d49cff' },
+  endless: { landmark: 'An orbital lift rising from a surface launch complex into space.', accent: '#50e3c2' },
+  sprint: { landmark: 'A high-speed transit corridor with machined ribs and light rails.', accent: '#42d9ff' },
+  marathon: { landmark: 'An inhabited orbital wheel above a distant world.', accent: '#b487ff' },
+  timeAttack: { landmark: 'A clockwork observatory with a suspended pendulum.', accent: '#ff5a98' },
+  zen: { landmark: 'A carved stone garden with a moon gate and reflecting pool.', accent: '#74f0ba' },
+  challenge: { landmark: 'A mineral specimen held inside an articulated vault.', accent: '#d49cff' },
 };
 
 const EVENT_PULSE = {
@@ -27,6 +31,7 @@ const EVENT_PULSE = {
 const ENDLESS_TOP = new THREE.Color('#030612');
 const ENDLESS_BOTTOM = new THREE.Color('#081329');
 const ENDLESS_ACCENT = new THREE.Color('#8acfff');
+const BACKGROUND_STYLES = Object.freeze({ nebula: 0, cityLights: 1, orbit: 2, solar: 3, aurora: 4, prism: 5, meteors: 6, clockwork: 7 });
 
 export function endlessAltitudeForLevel(level) {
   const number = Number(level);
@@ -36,6 +41,7 @@ export function endlessAltitudeForLevel(level) {
 export function createModeWorld(mode) {
   const id = Object.hasOwn(MODE_STYLE, mode) ? mode : 'endless';
   const style = MODE_STYLE[id];
+  const lighting = WORLD_LIGHTING[id];
   const group = new THREE.Group();
   group.name = `world-${id}`;
 
@@ -43,12 +49,13 @@ export function createModeWorld(mode) {
     new THREE.PlaneGeometry(1, 1),
     new THREE.ShaderMaterial({
       uniforms: {
-        uTop: { value: new THREE.Color(style.top) },
-        uBottom: { value: new THREE.Color(style.bottom) },
+        uTop: { value: new THREE.Color(lighting.top) },
+        uBottom: { value: new THREE.Color(lighting.bottom) },
         uAccent: { value: new THREE.Color(style.accent) },
         uTime: { value: 0 },
         uPulse: { value: 0 },
         uElevation: { value: 0 },
+        uStyle: { value: 0 },
       },
       vertexShader: `
         varying vec2 vUv;
@@ -64,6 +71,7 @@ export function createModeWorld(mode) {
         uniform float uTime;
         uniform float uPulse;
         uniform float uElevation;
+        uniform float uStyle;
         varying vec2 vUv;
         float hash(vec2 p) {
           return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
@@ -76,9 +84,35 @@ export function createModeWorld(mode) {
           color += uAccent * haze;
           float vignette = smoothstep(0.9, 0.08, distance(vUv, vec2(0.5, 0.48)));
           color *= 0.76 + vignette * 0.24;
-          float grain = hash(floor(vUv * vec2(640.0, 360.0)) + floor(uTime * 3.0)) - 0.5;
-          color += grain * 0.008;
-          color += uAccent * (0.018 + uElevation * 0.035) * smoothstep(0.0, 0.65, vUv.y);
+          float grain = hash(floor(vUv * vec2(640.0, 360.0)) + floor(uTime * 0.5)) - 0.5;
+          color += grain * 0.0012;
+          color += uAccent * (0.005 + uElevation * 0.008) * smoothstep(0.0, 0.65, vUv.y);
+          float pattern = 0.0;
+          if (uStyle < 0.5) {
+            pattern = pow(max(0.0, sin(vUv.x * 8.0 + uTime * 0.035) * sin(vUv.y * 5.0)), 3.0) * 0.025;
+          } else if (uStyle < 1.5) {
+            float column = floor(vUv.x * 54.0);
+            float roof = 0.12 + hash(vec2(column, 3.0)) * 0.29;
+            pattern = step(vUv.y, roof) * (0.02 + step(0.72, hash(floor(vUv * vec2(108.0, 65.0)))) * 0.035);
+          } else if (uStyle < 2.5) {
+            float orbit = length((vUv - vec2(0.6, 0.48)) * vec2(1.0, 1.7));
+            pattern = exp(-abs(orbit - 0.32) * 170.0) * 0.055;
+          } else if (uStyle < 3.5) {
+            float flare = abs(vUv.x - 0.72) + abs(vUv.y - 0.28) * 0.3;
+            pattern = exp(-flare * 15.0) * 0.07;
+          } else if (uStyle < 4.5) {
+            float curtain = sin(vUv.x * 25.0 + sin(vUv.y * 8.0 + uTime * 0.1));
+            pattern = pow(max(0.0, curtain), 8.0) * smoothstep(0.1, 0.85, vUv.y) * 0.035;
+          } else if (uStyle < 5.5) {
+            pattern = step(0.97, sin(vUv.x * 12.0 + vUv.y * 9.0) * sin(vUv.x * 8.0 - vUv.y * 11.0)) * 0.035;
+          } else if (uStyle < 6.5) {
+            float streak = fract(vUv.x * 8.0 - vUv.y * 4.0 + uTime * 0.025);
+            pattern = step(0.992, streak) * smoothstep(0.45, 0.95, vUv.y) * 0.06;
+          } else {
+            float clock = length((vUv - vec2(0.55, 0.47)) * vec2(1.0, 1.7));
+            pattern = exp(-abs(clock - 0.28) * 145.0) * 0.04;
+          }
+          color += uAccent * pattern * 2.2;
           gl_FragColor = vec4(color, 1.0);
         }
       `,
@@ -95,8 +129,12 @@ export function createModeWorld(mode) {
   group.add(environment);
   const seed = id.split('').reduce((sum, character) => sum + character.charCodeAt(0), 0);
   const stars = makeStarfield(seed, style.accent);
+  const trailingStars = id === 'endless' ? stars.clone() : null;
   environment.add(stars);
-  const landmark = makeLandmark(id, style.accent);
+  if (trailingStars) environment.add(trailingStars);
+  const landmark = id === 'endless'
+    ? createAscentLandmark(style.accent)
+    : createSculpturalModeLandmark(id);
   environment.add(landmark.group);
 
   const ringMaterial = new THREE.MeshBasicMaterial({
@@ -126,6 +164,9 @@ export function createModeWorld(mode) {
   let progress = 0;
   let lastRunId = null;
   let particleTexture = null;
+  let collectionWorld = null;
+  let collectionSceneId = null;
+  let qualityPreset = null;
 
   const world = {
     descriptor: { id, landmark: style.landmark },
@@ -148,11 +189,12 @@ export function createModeWorld(mode) {
       const nextAltitude = id === 'endless' ? endlessAltitudeForLevel(game?.scoring?.level) : 0;
       altitude = reducedMotion ? nextAltitude
         : altitude + (nextAltitude - altitude) * (1 - Math.exp(-dt * 2.4));
-      progress = id === 'endless' ? Math.min(1, altitude / 7) : progress;
+      // Approach deep space gradually so later levels still change the sky.
+      progress = id === 'endless' ? 1 - Math.exp(-altitude / 5.5) : progress;
       if (palette?.length) {
-        const topColor = new THREE.Color(style.top).lerp(new THREE.Color(palette[0]), 0.2);
-        const bottomColor = new THREE.Color(style.bottom).lerp(new THREE.Color(palette[palette.length - 1]), 0.16);
-        const accentColor = new THREE.Color(style.accent).lerp(new THREE.Color(palette[Math.floor(palette.length / 2)]), 0.44);
+        const topColor = tintSky(lighting.top, palette[0], 0.44);
+        const bottomColor = tintSky(lighting.bottom, palette[palette.length - 1], 0.38);
+        const accentColor = new THREE.Color(style.accent).lerp(new THREE.Color(palette[Math.floor(palette.length / 2)]), 0.68);
         if (id === 'endless') {
           topColor.lerp(ENDLESS_TOP, progress);
           bottomColor.lerp(ENDLESS_BOTTOM, progress);
@@ -162,8 +204,8 @@ export function createModeWorld(mode) {
         background.material.uniforms.uBottom.value.copy(bottomColor);
         background.material.uniforms.uAccent.value.copy(accentColor);
       } else if (id === 'endless') {
-        background.material.uniforms.uTop.value.copy(new THREE.Color(style.top).lerp(ENDLESS_TOP, progress));
-        background.material.uniforms.uBottom.value.copy(new THREE.Color(style.bottom).lerp(ENDLESS_BOTTOM, progress));
+        background.material.uniforms.uTop.value.copy(new THREE.Color(lighting.top).lerp(ENDLESS_TOP, progress));
+        background.material.uniforms.uBottom.value.copy(new THREE.Color(lighting.bottom).lerp(ENDLESS_BOTTOM, progress));
         background.material.uniforms.uAccent.value.copy(new THREE.Color(style.accent).lerp(ENDLESS_ACCENT, progress));
       }
 
@@ -176,6 +218,12 @@ export function createModeWorld(mode) {
           impactRing.visible = true;
         }
       });
+      if (game?.state === 'GAME_OVER') {
+        pulse = 0;
+        ringProgress = 1;
+        ringMaterial.opacity = 0;
+        impactRing.visible = false;
+      }
       if (reducedMotion) {
         pulse = 0;
         ringProgress = 1;
@@ -183,6 +231,7 @@ export function createModeWorld(mode) {
         environment.rotation.set(0, 0, 0);
         landmark.group.rotation.set(0, 0, 0);
         stars.rotation.set(0, 0, 0);
+        if (trailingStars) trailingStars.rotation.set(0, 0, 0);
       } else {
         const decay = Math.exp(-dt * 2.3);
         pulse *= decay;
@@ -192,24 +241,53 @@ export function createModeWorld(mode) {
         impactRing.visible = ringMaterial.opacity > 0.006;
         environment.rotation.z = Math.sin((elapsedMs + runElapsedMs) * 0.00008) * 0.008;
         stars.position.x = Math.sin(elapsedMs * 0.00004) * 7;
-        stars.position.y = id === 'endless' ? -altitude * 24 : 0;
       }
 
-      landmark.update?.({ time: elapsedMs / 1000, progress, altitude, pulse, reducedMotion });
+      if (trailingStars) {
+        const travel = altitude * 90 + (reducedMotion ? 0 : elapsedMs * 0.012);
+        stars.position.y = -(travel % 1350);
+        trailingStars.position.x = stars.position.x;
+        trailingStars.position.y = stars.position.y + 1350;
+      }
 
-      stars.material.opacity = (id === 'endless' ? 0.18 + progress * 0.68 : 0.86) * particleIntensity;
-      stars.visible = particleIntensity > 0;
+      landmark.update?.({ time: elapsedMs / 1000, progress, altitude, pulse, reducedMotion, glowIntensity });
+      if (collectionWorld) {
+        collectionWorld.group.position.y = id === 'endless' ? -altitude * 90 : 0;
+        collectionWorld.update({ time: elapsedMs / 1000, reducedMotion, pulse });
+      }
+
+      stars.material.opacity = (id === 'endless' ? 0.13 + progress * 0.49 : 0.48) * particleIntensity;
+      stars.visible = particleIntensity > 0 && (!collectionWorld || (id === 'endless' && progress > 0.6));
+      if (trailingStars) trailingStars.visible = stars.visible;
       pulseLight.intensity = reducedMotion ? 0 : pulse * glowIntensity * 1.8;
       background.material.uniforms.uTime.value = reducedMotion ? 0 : elapsedMs / 1000;
       background.material.uniforms.uPulse.value = reducedMotion ? 0 : pulse * glowIntensity;
       background.material.uniforms.uElevation.value = progress;
     },
-    setPalette(colors, styleName) {
+    setPalette(colors, styleName, sceneId = null) {
       palette = Array.isArray(colors) && colors.length >= 2 ? colors : null;
       group.userData.backgroundStyle = styleName || 'nebula';
+      background.material.uniforms.uStyle.value = BACKGROUND_STYLES[styleName] ?? 0;
+      if (sceneId !== collectionSceneId) {
+        if (collectionWorld) {
+          environment.remove(collectionWorld.group);
+          collectionWorld.dispose();
+        }
+        collectionWorld = createCollectionWorld(sceneId);
+        collectionSceneId = collectionWorld ? sceneId : null;
+        if (collectionWorld) {
+          environment.add(collectionWorld.group);
+          if (qualityPreset) collectionWorld.setQuality(qualityPreset);
+        }
+        landmark.group.visible = !collectionWorld;
+      }
+      group.userData.backgroundScene = collectionSceneId;
     },
     setAmbientParticles(colors, shape) {
-      const paletteColors = Array.isArray(colors) && colors.length ? colors.map((color) => new THREE.Color(color)) : [new THREE.Color(style.accent)];
+      const accent = new THREE.Color(style.accent);
+      const paletteColors = Array.isArray(colors) && colors.length
+        ? colors.map((color) => new THREE.Color(color).lerp(accent, 0.65))
+        : [accent];
       const colorAttribute = stars.geometry.getAttribute('color');
       for (let index = 0; index < colorAttribute.count; index += 1) {
         colorAttribute.setXYZ(index, ...paletteColors[index % paletteColors.length].toArray());
@@ -235,14 +313,40 @@ export function createModeWorld(mode) {
       }
       group.userData.clearEffect = clearShape;
     },
+    setQuality(preset) {
+      qualityPreset = preset;
+      landmark.setQuality?.(collectionWorld ? { ...preset, shadowSize: 0 } : preset);
+      collectionWorld?.setQuality(preset);
+    },
+    setFiltering(anisotropy) {
+      landmark.setFiltering?.(anisotropy);
+    },
     dispose() {
+      if (collectionWorld) {
+        environment.remove(collectionWorld.group);
+        collectionWorld.dispose();
+        collectionWorld = null;
+      }
+      const disposedGeometries = new Set();
+      const disposedMaterials = new Set();
+      const disposedTextures = new Set();
       group.traverse((object) => {
-        object.geometry?.dispose?.();
+        object.shadow?.dispose?.();
+        if (object.geometry && !disposedGeometries.has(object.geometry)) {
+          disposedGeometries.add(object.geometry);
+          object.geometry.dispose();
+        }
         const materials = Array.isArray(object.material) ? object.material : [object.material];
         materials.forEach((material) => {
-          material?.map?.dispose?.();
-          material?.alphaMap?.dispose?.();
-          material?.dispose?.();
+          if (!material || disposedMaterials.has(material)) return;
+          disposedMaterials.add(material);
+          for (const texture of [material.map, material.alphaMap, material.bumpMap, material.roughnessMap]) {
+            if (texture && !disposedTextures.has(texture)) {
+              disposedTextures.add(texture);
+              texture.dispose();
+            }
+          }
+          material.dispose();
         });
       });
       group.clear();
@@ -362,145 +466,6 @@ function createParticleTexture(shape = 'spark') {
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
   return texture;
-}
-
-function makeLandmark(id, accent) {
-  const group = new THREE.Group();
-  const accentColor = new THREE.Color(accent);
-  const wire = (opacity = 0.25) => new THREE.MeshBasicMaterial({
-    color: accentColor,
-    wireframe: true,
-    transparent: true,
-    opacity,
-    depthWrite: false,
-  });
-  const solid = (color = accent, opacity = 0.2) => new THREE.MeshBasicMaterial({
-    color,
-    transparent: opacity < 1,
-    opacity,
-    depthWrite: false,
-  });
-  const ring = (radius, thickness, x, y, z, material = wire(0.26)) => {
-    const mesh = new THREE.Mesh(new THREE.TorusGeometry(radius, thickness, 8, 96), material);
-    mesh.position.set(x, y, z);
-    group.add(mesh);
-    return mesh;
-  };
-  const mesh = (geometry, material, x, y, z, scale = 1) => {
-    const object = new THREE.Mesh(geometry, material);
-    object.position.set(x, y, z);
-    object.scale.setScalar(scale);
-    group.add(object);
-    return object;
-  };
-  const animated = [];
-  let horizon = null;
-  let moon = null;
-  let planet = null;
-  let core = null;
-  let reactorRings = [];
-  const ascentObjects = [];
-  let moonRing = null;
-
-  if (id === 'endless') {
-    const groundMat = solid('#10252f', 0.96);
-    horizon = mesh(new THREE.BoxGeometry(2400, 150, 4), groundMat, 0, -295, -170);
-    ascentObjects.push(horizon);
-    for (let i = 0; i < 13; i += 1) {
-      const x = -1000 + i * 166;
-      const height = 25 + ((i * 47) % 105);
-      const spire = mesh(new THREE.ConeGeometry(25 + (i % 4) * 9, height, 5), solid(i % 2 ? '#16303b' : '#1d3943', 0.93), x, -218 + height * 0.38, -168 + (i % 3) * 2);
-      ascentObjects.push(spire);
-      animated.push({ object: spire, phase: i * 0.8, range: 0.012 });
-    }
-    moon = mesh(new THREE.SphereGeometry(148, 32, 24), solid('#304e70', 0.55), 510, 245, -175);
-    moonRing = ring(212, 4, 510, 245, -174, wire(0.28));
-    moonRing.rotation.x = 1.22;
-    planet = moon;
-  } else if (id === 'sprint') {
-    for (let side = -1; side <= 1; side += 2) {
-      for (let lane = 0; lane < 4; lane += 1) {
-        const rail = mesh(new THREE.BoxGeometry(8, 2200, 2), solid(accent, 0.3), side * (330 + lane * 78), 0, -170 - lane * 5);
-        rail.rotation.z = side * 0.42;
-        animated.push({ object: rail, phase: lane * 0.7, range: 0.015 });
-      }
-    }
-    for (let i = 0; i < 7; i += 1) ring(460 + i * 105, 1.4, 0, 0, -155 - i * 11, wire(0.19 - i * 0.012));
-  } else if (id === 'marathon') {
-    planet = mesh(new THREE.SphereGeometry(260, 40, 30), solid('#394a79', 0.68), 610, 290, -184);
-    ring(650, 6, 0, 50, -172, wire(0.34)).rotation.set(0.26, 0.1, 0.04);
-    ring(760, 2, 0, 50, -178, wire(0.18)).rotation.set(0.26, 0.1, 0.04);
-    for (let i = 0; i < 8; i += 1) {
-      const station = mesh(new THREE.OctahedronGeometry(32, 1), solid(accent, 0.42), Math.cos(i * Math.PI / 4) * 640, 50 + Math.sin(i * Math.PI / 4) * 360, -160);
-      animated.push({ object: station, phase: i, range: 0.18 });
-    }
-  } else if (id === 'timeAttack') {
-    core = mesh(new THREE.IcosahedronGeometry(150, 2), solid('#a32860', 0.62), -500, 40, -174);
-    reactorRings = [ring(230, 6, -500, 40, -165), ring(330, 4, -500, 40, -176), ring(440, 2, -500, 40, -188)];
-    reactorRings[1].rotation.x = 0.3;
-    reactorRings[2].rotation.y = 0.4;
-    for (let i = 0; i < 12; i += 1) {
-      const spoke = mesh(new THREE.BoxGeometry(8, 820, 3), solid(accent, 0.36), -500, 40, -160);
-      spoke.rotation.z = (Math.PI * 2 * i) / 12;
-      animated.push({ object: spoke, phase: i * 0.4, range: 0.02 });
-    }
-  } else if (id === 'zen') {
-    for (let side = -1; side <= 1; side += 2) {
-      for (let i = 0; i < 6; i += 1) {
-        const x = side * (460 + (i % 3) * 140);
-        const y = -260 + Math.floor(i / 3) * 170;
-        const stem = mesh(new THREE.CylinderGeometry(2, 6, 150 + (i % 2) * 60, 8), solid('#318b72', 0.56), x, y, -174);
-        const bloom = mesh(new THREE.SphereGeometry(24 + (i % 3) * 7, 16, 12), solid(accent, 0.7), x + side * 14, y + 85, -167);
-        ring(38 + i * 2, 2, x + side * 14, y + 85, -166, wire(0.38));
-        animated.push({ object: stem, phase: i, range: 0.06 });
-        animated.push({ object: bloom, phase: i * 0.8, range: 0.12 });
-      }
-    }
-  } else {
-    for (let i = 0; i < 14; i += 1) {
-      const side = i % 2 ? 1 : -1;
-      const x = side * (355 + ((i * 67) % 440));
-      const y = -300 + ((i * 89) % 650);
-      const crystal = mesh(new THREE.OctahedronGeometry(55 + (i % 4) * 16, 0), wire(0.34), x, y, -178 - (i % 3) * 4);
-      animated.push({ object: crystal, phase: i * 0.56, range: 0.14 });
-    }
-    ring(480, 1.8, 0, 0, -185, wire(0.15));
-  }
-
-  return {
-    group,
-    update({ time = 0, progress = 0, altitude = 0, reducedMotion = false }) {
-      animated.forEach(({ object, phase, range }) => {
-        if (reducedMotion) return;
-        object.rotation.x = Math.sin(time * 0.36 + phase) * range;
-        object.rotation.y = Math.cos(time * 0.24 + phase) * range;
-      });
-      if (id === 'endless') {
-        const ascent = Math.min(1, progress);
-        ascentObjects.forEach((object) => {
-          object.position.y = object.userData.baseY ??= object.position.y;
-          object.position.y -= Math.min(altitude * 110, 900);
-          object.material.opacity = Math.max(0, (object.userData.baseOpacity ??= object.material.opacity) * (1 - ascent * 1.15));
-        });
-        if (planet) {
-          planet.position.y = 245 - Math.min(altitude * 86, 760);
-          planet.scale.setScalar(1 + ascent * 0.36);
-          planet.material.opacity = 0.55 + ascent * 0.15;
-          if (moonRing) {
-            moonRing.position.y = planet.position.y;
-            moonRing.scale.setScalar(1 + ascent * 0.36);
-          }
-        }
-      }
-      if (core && !reducedMotion) {
-        core.rotation.x = time * 0.11;
-        core.rotation.y = time * 0.17;
-        reactorRings.forEach((reactorRing, index) => {
-          reactorRing.rotation.z = (index % 2 ? -1 : 1) * time * (0.035 + index * 0.018);
-        });
-      }
-    },
-  };
 }
 
 function clamp(value, min, max, fallback) {

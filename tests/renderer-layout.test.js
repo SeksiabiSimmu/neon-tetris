@@ -108,17 +108,55 @@ test('draws the board, active piece, ghost, and separate preview meshes', () => 
     canvas, boardCanvas, nextCanvas, holdCanvas,
     rendererFactory: () => rendererBackend,
   });
-  renderer.render(createMockGame(), { dt: 16, shapes: {
+  const game = createMockGame();
+  renderer.render(game, { dt: 16, shapes: {
     I: [[ [0, 1], [1, 1], [2, 1], [3, 1] ]], O: [[ [1, 0], [2, 0], [1, 1], [2, 1] ]],
     T: [[ [1, 0], [0, 1], [1, 1], [2, 1] ]], J: [[ [0, 0], [0, 1], [1, 1], [2, 1] ]],
     L: [[ [2, 0], [0, 1], [1, 1], [2, 1] ]], S: [[ [1, 0], [2, 0], [0, 1], [1, 1] ]],
   } }, { I: '#4dd8ff', O: '#ffd84d', T: '#c65bff', J: '#4d7bff', L: '#ff9a4d', S: '#43e07a' });
 
   assert.equal(rendererBackend.renderCalls, 1);
+  assert.equal(renderer.worldCamera.isPerspectiveCamera, true);
+  assert.equal(renderer.camera.isOrthographicCamera, true);
+  assert.equal(renderer.modeWorld.group.parent, renderer.worldScene);
   assert.equal(renderer.meshPools.active.filter((mesh) => mesh.visible).length, 4);
   assert.equal(renderer.meshPools.ghost.filter((mesh) => mesh.visible).length, 4);
   assert.ok(renderer.meshPools.next.some((mesh) => mesh.visible));
   assert.ok(renderer.meshPools.hold.some((mesh) => mesh.visible));
+  const elapsed = renderer.elapsedMs;
+  game.state = 'PAUSED';
+  renderer.render(game, { dt: 50 });
+  assert.equal(renderer.elapsedMs, elapsed);
+  game.state = 'PLAYING';
+  renderer.render(game, { dt: 50, menuOpen: true });
+  assert.equal(renderer.elapsedMs, elapsed);
+  renderer.dispose();
+});
+
+test('board housing stays outside playable cells while its light direction follows the mode', () => {
+  const rect = { left: 500, top: 120, width: 300, height: 600 };
+  const renderer = new PremiumSceneRenderer({
+    canvas: new MockCanvas({ left: 0, top: 0, width: 1600, height: 1000 }),
+    boardCanvas: new MockCanvas(rect),
+    rendererFactory: createMockRenderer,
+  });
+  renderer.windowRef = { innerWidth: 1600, innerHeight: 1000, devicePixelRatio: 1, document: { hidden: false } };
+  const game = createMockGame();
+  game.mode = 'sprint';
+  renderer.render(game, { dt: 16 });
+  const board = rectToWorldRect(rect, 1600, 1000);
+  const interior = new THREE.Box3(
+    new THREE.Vector3(board.x - board.width / 2, board.y - board.height / 2, -50),
+    new THREE.Vector3(board.x + board.width / 2, board.y + board.height / 2, 50),
+  );
+  const rails = renderer.boardHousing.group.children.filter(object => object.userData.frameRail);
+  assert.equal(rails.length, 4);
+  renderer.boardHousing.group.updateMatrixWorld(true);
+  rails.forEach(rail => assert.equal(new THREE.Box3().setFromObject(rail).intersectsBox(interior), false));
+  assert.ok(renderer.keyLight.position.x < 0);
+  game.mode = 'marathon';
+  renderer.render(game, { dt: 16 });
+  assert.ok(renderer.keyLight.position.x > 0);
   renderer.dispose();
 });
 

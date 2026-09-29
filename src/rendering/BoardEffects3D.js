@@ -226,7 +226,7 @@ export class BoardEffects3D {
   }
 
   update(game, events, rect, settings, shapes, pieceColors, clearColor, dtMs) {
-    const dt = Math.min(50, Math.max(0, dtMs || 16.7));
+    const dt = Math.min(50, Math.max(0, dtMs ?? 16.7));
     const { cols, rows } = game.board;
     const clearing = game.clearingRows;
     if (clearing && clearing !== this.previousClearing) {

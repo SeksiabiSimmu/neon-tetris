@@ -24,6 +24,7 @@ export class SettingsPanel {
       const control = document.getElementById(`setting-${key}`);
       control.addEventListener('input', (event) => {
         settings.set(key, key === 'glowIntensity' ? Number(event.target.value) / 100 : Number(event.target.value), false);
+        this._updateRangeLabel(key, event.target.value);
         apply();
       });
       control.addEventListener('change', () => settings.save());
@@ -32,12 +33,14 @@ export class SettingsPanel {
     document.getElementById('setting-graphicsQuality').addEventListener('change', (event) => {
       settings.set('graphicsQuality', event.target.value);
       apply();
+      this._syncGraphicsControls();
     });
 
-    ['reducedMotion', 'colorblindMode'].forEach((key) => {
+    ['reducedMotion', 'colorblindMode', 'background3D', 'ambientOcclusion'].forEach((key) => {
       document.getElementById(`setting-${key}`).addEventListener('change', (event) => {
         settings.set(key, event.target.checked);
         apply();
+        if (key === 'background3D') this._syncGraphicsControls();
       });
     });
 
@@ -52,6 +55,31 @@ export class SettingsPanel {
     const resetStatus = document.getElementById('profile-reset-status');
     const cancelProfileReset = document.getElementById('settings-cancel-profile-reset');
 
+    const closeProfileReset = () => {
+      resetConfirm.hidden = true;
+      resetProfileButton.setAttribute('aria-expanded', 'false');
+      resetProfileButton.focus({ preventScroll: true });
+    };
+
+    window.addEventListener('keydown', (event) => {
+      if (resetConfirm.hidden) return;
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        closeProfileReset();
+      } else if (event.key === 'Tab') {
+        const first = cancelProfileReset;
+        const last = document.getElementById('settings-confirm-profile-reset');
+        if (event.shiftKey && (document.activeElement === first || !resetConfirm.contains(document.activeElement))) {
+          event.preventDefault();
+          last.focus();
+        } else if (!event.shiftKey && (document.activeElement === last || !resetConfirm.contains(document.activeElement))) {
+          event.preventDefault();
+          first.focus();
+        }
+      }
+    }, true);
+
     resetProfileButton.addEventListener('click', () => {
       resetStatus.textContent = '';
       resetStatus.classList.remove('is-error');
@@ -61,22 +89,18 @@ export class SettingsPanel {
     });
 
     cancelProfileReset.addEventListener('click', () => {
-      resetConfirm.hidden = true;
-      resetProfileButton.setAttribute('aria-expanded', 'false');
-      resetProfileButton.focus({ preventScroll: true });
+      closeProfileReset();
     });
 
     document.getElementById('settings-confirm-profile-reset').addEventListener('click', () => {
       const saved = this.progression.resetProfile(this.game);
       this.onProfileReset();
       apply();
-      resetConfirm.hidden = true;
-      resetProfileButton.setAttribute('aria-expanded', 'false');
+      closeProfileReset();
       resetStatus.classList.toggle('is-error', !saved);
       resetStatus.textContent = saved
         ? 'Progression reset. Settings, key bindings, and mode records were kept.'
         : 'Progression reset for this session, but browser storage could not save the change.';
-      resetProfileButton.focus({ preventScroll: true });
       this.audio?.play('menu');
     });
   }
@@ -94,8 +118,14 @@ export class SettingsPanel {
     document.getElementById('setting-glowIntensity').value = Math.round(values.glowIntensity * 100);
     document.getElementById('setting-particleIntensity').value = values.particleIntensity;
     document.getElementById('setting-graphicsQuality').value = values.graphicsQuality;
+    document.getElementById('setting-background3D').checked = values.background3D;
+    document.getElementById('setting-ambientOcclusion').checked = values.ambientOcclusion;
+    this._syncGraphicsControls();
     document.getElementById('setting-reducedMotion').checked = values.reducedMotion;
     document.getElementById('setting-colorblindMode').checked = values.colorblindMode;
+    ['masterVolume', 'sfxVolume', 'glowIntensity', 'particleIntensity'].forEach((key) => {
+      this._updateRangeLabel(key, document.getElementById(`setting-${key}`).value);
+    });
 
     const keybindActions = [
       ['left', 'Move Left'], ['right', 'Move Right'], ['softDrop', 'Soft Drop'],
@@ -113,6 +143,18 @@ export class SettingsPanel {
 
   _codeForAction(action) {
     return Object.keys(this.input.keyMap).find((code) => this.input.keyMap[code] === action) || '—';
+  }
+
+  _syncGraphicsControls() {
+    const control = document.getElementById('setting-ambientOcclusion');
+    const unavailable = !this.settings.get('background3D') || this.settings.get('graphicsQuality') !== 'high';
+    control.disabled = unavailable;
+    control.closest('.settings-row')?.classList.toggle('is-unavailable', unavailable);
+  }
+
+  _updateRangeLabel(key, value) {
+    const output = document.querySelector(`[data-setting-value="${key}"]`);
+    if (output) output.textContent = `${Math.round(Number(value))}%`;
   }
 
   _codeLabel(code) {

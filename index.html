@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Tetris</title>
+<title>Neon Tetris</title>
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -11,8 +11,9 @@
   <canvas id="scene-canvas" aria-hidden="true"></canvas>
 
   <div class="game-wrap">
-    <header>
-      <h1 class="game-title">TETRIS</h1>
+    <header class="game-header">
+      <div class="game-title">NEON <strong>TETRIS</strong></div>
+      <div id="game-mode-name" class="game-mode-name">ENDLESS</div>
     </header>
 
     <div class="game-layout">
@@ -21,52 +22,20 @@
           <h2 class="panel-label">Hold</h2>
           <canvas id="hold-canvas" width="120" height="100"></canvas>
         </section>
-        <button id="pause-button" class="btn btn--ghost" type="button">Pause</button>
-        <button id="restart-button" class="btn btn--ghost" type="button">Restart</button>
-        <button id="menu-button" class="btn btn--ghost" type="button">Menu</button>
+        <div class="game-actions">
+          <button id="pause-button" class="btn btn--ghost" type="button">Pause <span aria-hidden="true">Esc</span></button>
+          <button id="restart-button" class="btn btn--ghost" type="button">Restart <span aria-hidden="true">R</span></button>
+          <button id="menu-button" class="btn btn--ghost" type="button">Menu</button>
+        </div>
       </aside>
 
       <div class="board-frame">
         <canvas id="board-canvas" width="300" height="600"></canvas>
 
-        <div class="hud-badges">
-          <span id="combo-badge" class="hud-badge hud-badge--combo"></span>
-          <span id="b2b-badge" class="hud-badge hud-badge--b2b">Back-to-Back</span>
-        </div>
-        <div id="clear-callout" class="clear-callout"></div>
-        <div id="level-up-callout" class="level-up-callout"></div>
-
-        <div id="pause-overlay" class="overlay" role="dialog" aria-modal="true" aria-labelledby="pause-title">
-          <p id="pause-title" class="overlay-title">Paused</p>
-          <div class="overlay-actions">
-            <button id="resume-button" class="btn btn--primary" type="button">Resume</button>
-            <button id="pause-restart-button" class="btn btn--ghost" type="button">Restart</button>
-            <button id="pause-settings-button" class="btn btn--ghost" type="button">Settings</button>
-            <button id="pause-menu-button" class="btn btn--ghost" type="button">Quit to Menu</button>
-          </div>
-        </div>
-
-        <div id="game-over-overlay" class="overlay" role="dialog" aria-modal="true" aria-labelledby="game-over-title">
-          <p id="game-over-title" class="overlay-title">Game Over</p>
-          <p id="game-over-reason" class="overlay-subtitle"></p>
-          <div id="record-banner" class="record-banner">New Record!</div>
-          <div class="game-over-stats">
-            <div><span class="go-label">Score</span><span id="final-score-value" class="go-value">0</span></div>
-            <div><span class="go-label">Level</span><span id="final-level-value" class="go-value">1</span></div>
-            <div><span class="go-label">Lines</span><span id="final-lines-value" class="go-value">0</span></div>
-            <div><span class="go-label">XP Earned</span><span id="final-xp-value" class="go-value">+0</span></div>
-          </div>
-          <p id="final-best-comparison" class="overlay-subtitle"></p>
-          <div id="final-achievements" class="final-achievements"></div>
-          <div class="overlay-actions">
-            <button id="restart-button-gameover" class="btn btn--primary" type="button">Retry</button>
-            <button id="gameover-menu-button" class="btn btn--ghost" type="button">Menu</button>
-          </div>
-        </div>
       </div>
 
       <aside class="side-panel side-panel--right">
-        <section class="panel">
+        <section class="panel panel--score">
           <h2 class="panel-label">Score</h2>
           <p id="score-value" class="stat-value">0</p>
         </section>
@@ -98,6 +67,14 @@
           <h2 class="panel-label">Next</h2>
           <canvas id="next-canvas" width="120" height="300"></canvas>
         </section>
+        <div class="feedback-rail" aria-live="polite">
+          <div class="hud-badges">
+            <span id="combo-badge" class="hud-badge hud-badge--combo"></span>
+            <span id="b2b-badge" class="hud-badge hud-badge--b2b">Back-to-Back</span>
+          </div>
+          <div id="clear-callout" class="clear-callout"></div>
+          <div id="level-up-callout" class="level-up-callout"></div>
+        </div>
         <section class="panel hud-xp-panel">
           <h2 class="panel-label">Player Lv <span id="hud-player-level">1</span></h2>
           <div class="xp-bar"><div id="hud-xp-fill" class="xp-bar__fill"></div></div>
@@ -107,38 +84,74 @@
 
     <pre id="debug-panel" class="debug-panel"></pre>
 
-    <footer class="controls-hint">
+    <footer class="controls-hint" aria-label="Controls">
       <span class="hint"><kbd>&larr;</kbd><kbd>&rarr;</kbd> Move</span>
-      <span class="hint"><kbd>&darr;</kbd> Soft drop</span>
+      <span class="hint"><kbd>&darr;</kbd> Drop</span>
       <span class="hint"><kbd>Space</kbd> Hard drop</span>
-      <span class="hint"><kbd>&uarr;</kbd> Rotate</span>
-      <span class="hint"><kbd>Z</kbd> Rotate back</span>
+      <span class="hint"><kbd>&uarr;</kbd><kbd>Z</kbd> Rotate</span>
       <span class="hint"><kbd>C</kbd> Hold</span>
-      <span class="hint"><kbd>R</kbd> Restart</span>
-      <span class="hint"><kbd>Esc</kbd> Pause / menu back</span>
     </footer>
+
+    <div id="pause-overlay" class="overlay" role="dialog" aria-modal="true" aria-labelledby="pause-title">
+      <div class="overlay__sheet">
+          <p id="pause-title" class="overlay-title">Paused</p>
+          <p class="overlay-subtitle">Your run is waiting.</p>
+          <div class="overlay-actions">
+            <button id="resume-button" class="btn btn--primary" type="button">Resume</button>
+            <button id="pause-restart-button" class="btn btn--ghost" type="button">Restart</button>
+            <button id="pause-settings-button" class="btn btn--ghost" type="button">Settings</button>
+            <button id="pause-menu-button" class="btn btn--ghost" type="button">Quit to Menu</button>
+          </div>
+      </div>
+    </div>
+
+    <div id="game-over-overlay" class="overlay" role="dialog" aria-modal="true" aria-labelledby="game-over-title">
+      <div class="overlay__sheet">
+          <p id="game-over-title" class="overlay-title">Game Over</p>
+          <p id="game-over-reason" class="overlay-subtitle"></p>
+          <div id="record-banner" class="record-banner">New Record!</div>
+          <div class="game-over-stats">
+            <div><span class="go-label">Score</span><span id="final-score-value" class="go-value">0</span></div>
+            <div><span class="go-label">Level</span><span id="final-level-value" class="go-value">1</span></div>
+            <div><span class="go-label">Lines</span><span id="final-lines-value" class="go-value">0</span></div>
+            <div><span class="go-label">XP Earned</span><span id="final-xp-value" class="go-value">+0</span></div>
+          </div>
+          <p id="final-best-comparison" class="overlay-subtitle"></p>
+          <div id="final-achievements" class="final-achievements"></div>
+          <div class="overlay-actions">
+            <button id="restart-button-gameover" class="btn btn--primary" type="button">Retry</button>
+            <button id="gameover-menu-button" class="btn btn--ghost" type="button">Menu</button>
+          </div>
+      </div>
+    </div>
   </div>
 
   <div id="achievement-toast" class="achievement-toast"></div>
 
   <div id="screen-root">
     <section id="screen-main-menu" class="screen screen--menu">
-      <div class="menu-card">
-        <h1 class="menu-title">TETRIS</h1>
-        <p class="menu-subtitle">Player Level <span id="menu-player-level">1</span></p>
-
-        <div class="menu-section">
-          <button id="menu-play-button" class="menu-play-btn" type="button">Play</button>
-          <button id="menu-resume-button" class="menu-resume-btn" type="button">Resume Game</button>
+      <div class="menu-stage">
+        <div class="menu-copy">
+          <h1 class="menu-title"><span>NEON</span><strong>TETRIS</strong></h1>
+          <p class="menu-subtitle">Six ways to play. One perfect placement at a time.</p>
+          <div class="menu-section">
+            <button id="menu-play-button" class="menu-play-btn" type="button">Play <span aria-hidden="true">↗</span></button>
+            <button id="menu-resume-button" class="menu-resume-btn" type="button">Resume Game</button>
+          </div>
+          <nav class="menu-nav" aria-label="More">
+            <button class="menu-nav__btn" data-screen="progression">Progression</button>
+            <button class="menu-nav__btn" data-screen="achievements">Achievements</button>
+            <button class="menu-nav__btn" data-screen="statistics">Statistics</button>
+            <button class="menu-nav__btn" data-screen="customization">Customization</button>
+            <button class="menu-nav__btn" data-screen="settings">Settings</button>
+          </nav>
+          <p class="menu-profile">PLAYER LEVEL <strong id="menu-player-level">1</strong></p>
         </div>
-
-        <nav class="menu-nav">
-          <button class="menu-nav__btn" data-screen="progression">Progression</button>
-          <button class="menu-nav__btn" data-screen="achievements">Achievements</button>
-          <button class="menu-nav__btn" data-screen="statistics">Statistics</button>
-          <button class="menu-nav__btn" data-screen="customization">Customization</button>
-          <button class="menu-nav__btn" data-screen="settings">Settings</button>
-        </nav>
+        <div class="menu-art" aria-hidden="true">
+          <div class="menu-art__field"></div>
+          <div class="menu-art__piece"><i></i><i></i><i></i><i></i></div>
+          <span class="menu-art__caption">FIND THE FIT</span>
+        </div>
       </div>
     </section>
 
@@ -211,12 +224,32 @@
     </section>
 
     <section id="screen-customization" class="screen">
-      <div class="screen-panel">
+      <div class="screen-panel customization-panel">
         <header class="screen-header">
-          <h1>Customization</h1>
+          <div><p class="customization-eyebrow">Your collection</p><h1>Customization</h1></div>
           <button class="btn btn--ghost screen-back" data-back="main-menu">Back</button>
         </header>
-        <div id="customization-categories" class="customization-categories"></div>
+        <div class="customization-studio">
+          <nav id="customization-categories" class="customization-categories" aria-label="Appearance categories"></nav>
+          <section class="customization-collection" aria-label="Items">
+            <div class="customization-collection__heading"><h2 id="customization-category-title">Piece skins</h2><span id="customization-count"></span></div>
+            <div id="customization-items" class="customization-items"></div>
+          </section>
+          <section class="customization-inspector" aria-label="Appearance preview">
+            <div class="customization-inspector__top"><span class="inspector-label">Live inspection</span><label for="customization-mode">World <select id="customization-mode" aria-label="Preview world"></select></label></div>
+            <div class="customization-stage"><canvas id="customization-preview-canvas" aria-label="3D preview of all seven tetrominoes on a sample board in the selected world"></canvas><div id="customization-preview-fallback" class="customization-preview-fallback" hidden>3D preview unavailable. Item colors and descriptions remain available.</div></div>
+            <p id="customization-preview-caption" class="customization-stage__caption">Sample board · all seven pieces · actual game world</p>
+            <div id="customization-demo" class="customization-demo" role="group" aria-label="Demonstrate falling and landing effects">
+              <span class="inspector-label">Demonstrate</span>
+              <button type="button" data-demo="fall">Fall</button>
+              <button type="button" data-demo="softDrop">Soft drop</button>
+              <button type="button" data-demo="hardDrop">Hard drop</button>
+              <button type="button" data-demo="landing">Landing</button>
+              <button type="button" data-demo="clear">Line clear</button>
+            </div>
+            <div class="customization-inspector__details"><div><span id="customization-item-state" class="inspector-label"></span><h2 id="customization-item-name"></h2><p id="customization-item-description"></p><p id="customization-item-requirement"></p></div><button id="customization-equip" type="button" class="btn btn--primary">Equip</button></div>
+          </section>
+        </div>
       </div>
     </section>
 
@@ -227,17 +260,19 @@
           <button class="btn btn--ghost screen-back" data-back="main-menu">Back</button>
         </header>
         <div class="settings-list">
+          <h2 class="settings-group-title">Audio</h2>
           <div class="settings-row">
             <label for="setting-masterVolume">Master Volume</label>
-            <input type="range" id="setting-masterVolume" min="0" max="100" step="1">
+            <div class="settings-control"><input type="range" id="setting-masterVolume" min="0" max="100" step="1"><output data-setting-value="masterVolume" for="setting-masterVolume">80%</output></div>
           </div>
           <div class="settings-row">
             <label for="setting-sfxVolume">SFX Volume</label>
-            <input type="range" id="setting-sfxVolume" min="0" max="100" step="1">
+            <div class="settings-control"><input type="range" id="setting-sfxVolume" min="0" max="100" step="1"><output data-setting-value="sfxVolume" for="setting-sfxVolume">80%</output></div>
           </div>
+          <h2 class="settings-group-title">Display</h2>
           <div class="settings-row">
             <label for="setting-glowIntensity">Glow Intensity</label>
-            <input type="range" id="setting-glowIntensity" min="0" max="150" step="5">
+            <div class="settings-control"><input type="range" id="setting-glowIntensity" min="0" max="150" step="5"><output data-setting-value="glowIntensity" for="setting-glowIntensity">100%</output></div>
           </div>
           <div class="settings-row">
             <label for="setting-graphicsQuality">Graphics Quality</label>
@@ -247,10 +282,19 @@
               <option value="high">High</option>
             </select>
           </div>
+          <div class="settings-row settings-row--toggle">
+            <label for="setting-background3D">3D Background</label>
+            <input type="checkbox" id="setting-background3D" class="toggle">
+          </div>
+          <div class="settings-row settings-row--toggle">
+            <label for="setting-ambientOcclusion">Ambient Occlusion (High only)</label>
+            <input type="checkbox" id="setting-ambientOcclusion" class="toggle">
+          </div>
           <div class="settings-row">
             <label for="setting-particleIntensity">Particle Intensity</label>
-            <input type="range" id="setting-particleIntensity" min="0" max="100" step="5">
+            <div class="settings-control"><input type="range" id="setting-particleIntensity" min="0" max="100" step="5"><output data-setting-value="particleIntensity" for="setting-particleIntensity">100%</output></div>
           </div>
+          <h2 class="settings-group-title">Accessibility</h2>
           <div class="settings-row settings-row--toggle">
             <label for="setting-reducedMotion">Reduced Motion</label>
             <input type="checkbox" id="setting-reducedMotion" class="toggle">
@@ -272,7 +316,7 @@
           </div>
           <button id="settings-reset-profile-button" class="btn btn--danger-ghost" type="button" aria-controls="profile-reset-confirm" aria-expanded="false">Reset Progression</button>
         </section>
-        <div id="profile-reset-confirm" class="profile-reset-confirm" hidden aria-labelledby="profile-reset-confirm-title">
+        <div id="profile-reset-confirm" class="profile-reset-confirm" hidden role="dialog" aria-modal="true" aria-labelledby="profile-reset-confirm-title">
           <div>
             <h3 id="profile-reset-confirm-title">Reset your progression?</h3>
             <p>This permanently clears your player level, lifetime and session stats, achievements, and unlocked cosmetics on this device.</p>

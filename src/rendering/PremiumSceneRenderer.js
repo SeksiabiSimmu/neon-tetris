@@ -2,16 +2,26 @@ import * as THREE from 'three';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { SSAOPass } from 'three/addons/postprocessing/SSAOPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { collectGameplayEvents } from './gameplaySignals.js';
 import { createModeWorld } from './modeWorlds.js';
 import { BoardEffects3D } from './BoardEffects3D.js';
+import { graphicsPreset } from './graphicsQuality.js';
+import { BoardHousing3D } from './BoardHousing3D.js';
+import { WORLD_LIGHTING, reflectionStudio } from './worldLighting.js';
+import { PIECE_TYPES, roundedBlockGeometry, createBlockAppearance } from './blockAppearance.js';
+import { createBoardSurfaceMaterial } from './boardSurface.js';
+import { FallingEffects3D } from './FallingEffects3D.js';
 
-const PIECE_TYPES = ['I', 'O', 'T', 'S', 'Z', 'J', 'L'];
 const BASE_SETTINGS = Object.freeze({
   reducedMotion: false,
   colorblindMode: false,
   particleIntensity: 1,
   glowIntensity: 1,
+  graphicsQuality: 'high',
+  background3D: true,
+  ambientOcclusion: true,
 });
 
 /**
@@ -25,32 +35,6 @@ export function rectToWorldRect(rect, viewportWidth, viewportHeight) {
     width: rect.width,
     height: rect.height,
   };
-}
-
-function roundedBlockGeometry() {
-  const shape = new THREE.Shape();
-  const inset = 0.07;
-  const radius = 0.17;
-  shape.moveTo(-0.5 + inset + radius, -0.5 + inset);
-  shape.lineTo(0.5 - inset - radius, -0.5 + inset);
-  shape.quadraticCurveTo(0.5 - inset, -0.5 + inset, 0.5 - inset, -0.5 + inset + radius);
-  shape.lineTo(0.5 - inset, 0.5 - inset - radius);
-  shape.quadraticCurveTo(0.5 - inset, 0.5 - inset, 0.5 - inset - radius, 0.5 - inset);
-  shape.lineTo(-0.5 + inset + radius, 0.5 - inset);
-  shape.quadraticCurveTo(-0.5 + inset, 0.5 - inset, -0.5 + inset, 0.5 - inset - radius);
-  shape.lineTo(-0.5 + inset, -0.5 + inset + radius);
-  shape.quadraticCurveTo(-0.5 + inset, -0.5 + inset, -0.5 + inset + radius, -0.5 + inset);
-
-  const geometry = new THREE.ExtrudeGeometry(shape, {
-    depth: 0.22,
-    bevelEnabled: true,
-    bevelSegments: 3,
-    bevelSize: 0.05,
-    bevelThickness: 0.055,
-    curveSegments: 4,
-  });
-  geometry.center();
-  return geometry;
 }
 
 function worldCellPosition(rect, cols, rows, col, row, z) {
@@ -91,8 +75,11 @@ export class PremiumSceneRenderer {
     this.renderer = null;
     this.composer = null;
     this.bloomPass = null;
+    this.aoPass = null;
+    this.environmentTarget = null;
     this.settings = { ...BASE_SETTINGS };
-    this.blockMaterial = { roughness: 0.28, metalness: 0.48, clearcoat: 0.84, emissiveIntensity: 0.2 };
+    this.blockMaterial = { family: 'ceramic', roughness: 0.28, metalness: 0.48, clearcoat: 0.84, emissiveIntensity: 0.2 };
+    this.blockAppearance = createBlockAppearance();
     this.boardTheme = { bgTop: '#111a2e', bgBottom: '#080b14', gridColor: '#78d2ff', gridAlpha: 0.11 };
     this.pieceColors = {};
     this.materials = new Map();
@@ -115,14 +102,22 @@ export class PremiumSceneRenderer {
     this.clearEffect = null;
 
     this.scene = new THREE.Scene();
+    this.worldScene = new THREE.Scene();
+    this.worldScene.background = new THREE.Color('#0a1722');
+    this.worldCamera = new THREE.PerspectiveCamera(35, 1, 1, 4000);
+    this.worldCamera.position.set(0, 90, 1000);
+    this.worldCamera.lookAt(0, 0, -180);
     this.camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 3000);
     this.camera.position.set(0, 0, 1200);
     this.camera.lookAt(0, 0, 0);
 
     this._createSharedResources();
     this._createBoardPresentation();
+    this._createPreviewBackdrops();
+    this.boardHousing = new BoardHousing3D(this.scene);
     this._createPieceLayers();
     this.boardEffects = new BoardEffects3D(this.scene, this.blockGeometry, this.materials);
+    this.fallingEffects = new FallingEffects3D(this.scene);
     this._onContextLost = this._handleContextLost.bind(this);
     this._onContextRestored = this._handleContextRestored.bind(this);
     canvas?.addEventListener?.('webglcontextlost', this._onContextLost, false);
@@ -141,7 +136,7 @@ export class PremiumSceneRenderer {
       if ('outputColorSpace' in this.renderer) this.renderer.outputColorSpace = THREE.SRGBColorSpace;
       if ('toneMapping' in this.renderer) this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
       if ('toneMappingExposure' in this.renderer) this.renderer.toneMappingExposure = 1.16;
-      this._setupBloom();
+      this._setupPostprocessing();
       this.resize();
       this._setAvailable(true);
     } catch (error) {
@@ -149,6 +144,8 @@ export class PremiumSceneRenderer {
       try { this.renderer?.dispose?.(); } catch { /* Preserve the Canvas fallback if partial cleanup fails. */ }
       this.composer = null;
       this.bloomPass = null;
+      this.environmentTarget?.dispose?.();
+      this.environmentTarget = null;
       this.renderer = null;
       this._setAvailable(false);
     }
@@ -156,33 +153,7 @@ export class PremiumSceneRenderer {
 
   _createSharedResources() {
     this.blockGeometry = roundedBlockGeometry();
-    this.panelMaterial = new THREE.ShaderMaterial({
-      uniforms: {
-        uTop: { value: new THREE.Color(this.boardTheme.bgTop) },
-        uBottom: { value: new THREE.Color(this.boardTheme.bgBottom) },
-        uOpacity: { value: 0.72 },
-      },
-      vertexShader: `
-        varying vec2 vUv;
-        void main() {
-          vUv = uv;
-          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-        }
-      `,
-      fragmentShader: `
-        uniform vec3 uTop;
-        uniform vec3 uBottom;
-        uniform float uOpacity;
-        varying vec2 vUv;
-        void main() {
-          gl_FragColor = vec4(mix(uBottom, uTop, smoothstep(0.0, 1.0, vUv.y)), uOpacity);
-          #include <tonemapping_fragment>
-          #include <colorspace_fragment>
-        }
-      `,
-      transparent: true,
-      depthWrite: false,
-    });
+    this.panelMaterial = createBoardSurfaceMaterial(this.boardTheme);
     this.gridMaterial = new THREE.LineBasicMaterial({
       color: this.boardTheme.gridColor,
       transparent: true,
@@ -222,10 +193,10 @@ export class PremiumSceneRenderer {
       this.dimMaterials.set(type, dimMaterial);
     });
 
-    this.ambientLight = new THREE.HemisphereLight('#c6f0ff', '#152034', 1.2);
-    this.keyLight = new THREE.DirectionalLight('#ffffff', 1.75);
-    this.keyLight.position.set(-1, 1, 2);
-    this.rimLight = new THREE.PointLight('#4dd8ff', 1.5, 900, 2);
+    this.ambientLight = new THREE.HemisphereLight('#dce5e9', '#17212a', 0.7);
+    this.keyLight = new THREE.DirectionalLight('#ffffff', 1.4);
+    this.keyLight.position.set(-180, 240, 650);
+    this.rimLight = new THREE.PointLight('#89a7aa', 0.5, 900, 2);
     this.rimLight.position.set(0, 0, 80);
     this.scene.add(this.ambientLight, this.keyLight, this.rimLight);
   }
@@ -258,16 +229,88 @@ export class PremiumSceneRenderer {
     });
   }
 
-  _setupBloom() {
-    // Test/fallback renderers need no post-processing; the real WebGL path gets
-    // a low-strength bloom pass that keeps the canvas alpha channel intact.
+  _createEnvironmentMap(mode = this.modeId || 'endless') {
+    this.environmentTarget?.dispose?.();
+    this.environmentTarget = null;
+    this.worldScene.environment = null;
+    this.scene.environment = null;
     if (!this.renderer?.isWebGLRenderer) return;
-    const size = this.renderer.getSize(new THREE.Vector2());
-    this.composer = new EffectComposer(this.renderer);
-    this.composer.addPass(new RenderPass(this.scene, this.camera));
-    this.bloomPass = new UnrealBloomPass(size, 0.32, 0.72, 0.64);
-    this.composer.addPass(this.bloomPass);
-    this._applyBloomSettings();
+    let studio;
+    let pmrem;
+    try {
+      studio = reflectionStudio(mode);
+      pmrem = new THREE.PMREMGenerator(this.renderer);
+      this.environmentTarget = pmrem.fromScene(studio, 0.04);
+      this.worldScene.environment = this.environmentTarget.texture;
+      this.scene.environment = this.environmentTarget.texture;
+      this.worldScene.environmentIntensity = 0.38;
+      this.scene.environmentIntensity = 0.32;
+    } catch (error) {
+      // Geometry and direct lights remain usable without environment reflections.
+      console.warn('Environment reflections unavailable.', error);
+    } finally {
+      pmrem?.dispose();
+      studio?.dispose();
+    }
+  }
+
+  _createPreviewBackdrops() {
+    this.previewBackdropGeometry = new THREE.PlaneGeometry(1, 1);
+    this.previewBackdropMaterial = new THREE.MeshBasicMaterial({
+      color: '#07121c', transparent: true, opacity: 0.72, depthWrite: false,
+    });
+    this.previewBackdrops = {};
+    for (const name of ['next', 'hold']) {
+      const backdrop = new THREE.Mesh(this.previewBackdropGeometry, this.previewBackdropMaterial);
+      backdrop.position.z = 1;
+      backdrop.visible = false;
+      this.scene.add(backdrop);
+      this.previewBackdrops[name] = backdrop;
+    }
+  }
+
+  _setupPostprocessing() {
+    // Test/fallback renderers need no post-processing; the real WebGL path gets
+    // scene-only post-processing. The board is composited afterward at full resolution.
+    if (!this.renderer?.isWebGLRenderer) return;
+    try {
+      const size = this.renderer.getSize(new THREE.Vector2());
+      this.composer = new EffectComposer(this.renderer);
+      this.composer.addPass(new RenderPass(this.worldScene, this.worldCamera));
+      this.aoPass = new SSAOPass(this.worldScene, this.worldCamera, size.x, size.y);
+      this.aoPass.kernelRadius = 12;
+      this.aoPass.minDistance = 0.006;
+      this.aoPass.maxDistance = 0.12;
+      this.composer.addPass(this.aoPass);
+      this.bloomPass = new UnrealBloomPass(size, 0.32, 0.72, 0.64);
+      this.composer.addPass(this.bloomPass);
+      this.composer.addPass(new OutputPass());
+      this._applyGraphicsQuality();
+      this._applyBloomSettings();
+    } catch (error) {
+      console.warn('Post-processing unavailable; using direct 3D rendering.', error);
+      this.composer?.dispose?.();
+      this.composer = null;
+      this.aoPass = null;
+      this.bloomPass = null;
+    }
+  }
+
+  _applyGraphicsQuality() {
+    if (!this.renderer?.isWebGLRenderer) return;
+    const maxSamples = this.renderer.capabilities?.maxSamples ?? 0;
+    const maxAnisotropy = this.renderer.capabilities?.getMaxAnisotropy?.() ?? 1;
+    const preset = graphicsPreset(this.settings.graphicsQuality, maxSamples, maxAnisotropy);
+    this.qualityPreset = preset;
+    this.renderer.shadowMap.enabled = preset.shadowSize > 0;
+    this.renderer.shadowMap.type = THREE.PCFShadowMap;
+    this.composer?.setPixelRatio?.(this._pixelRatio * preset.renderScale || preset.renderScale);
+    this.composer?.setSize?.(this._viewportWidth || 1, this._viewportHeight || 1);
+    if (this.composer?.renderTarget1) this.composer.renderTarget1.samples = preset.samples;
+    if (this.composer?.renderTarget2) this.composer.renderTarget2.samples = preset.samples;
+    if (this.aoPass) this.aoPass.enabled = preset.ao && this.settings.ambientOcclusion;
+    this.modeWorld?.setQuality?.(preset);
+    this.modeWorld?.setFiltering?.(preset.anisotropy);
   }
 
   _setAvailable(available) {
@@ -284,8 +327,19 @@ export class PremiumSceneRenderer {
 
   _handleContextRestored() {
     if (this.disposed || !this.renderer) return;
-    this.resize();
-    this._setAvailable(true);
+    try {
+      this.composer?.dispose?.();
+      this.composer = null;
+      this.aoPass = null;
+      this.bloomPass = null;
+      this._createEnvironmentMap();
+      this._setupPostprocessing();
+      this.resize();
+      this._setAvailable(true);
+    } catch (error) {
+      console.warn('WebGL context restoration failed; Canvas remains active.', error);
+      this._setAvailable(false);
+    }
   }
 
   resize() {
@@ -293,7 +347,7 @@ export class PremiumSceneRenderer {
     const fallbackRect = this.canvas?.getBoundingClientRect?.() || { width: 1, height: 1 };
     const width = Math.max(1, this.windowRef?.innerWidth || fallbackRect.width || 1);
     const height = Math.max(1, this.windowRef?.innerHeight || fallbackRect.height || 1);
-    const pixelRatio = Math.max(1, this.windowRef?.devicePixelRatio || 1);
+    const pixelRatio = Math.max(1, Math.min(2, this.windowRef?.devicePixelRatio || 1));
     this._viewportWidth = width;
     this._viewportHeight = height;
     this._pixelRatio = pixelRatio;
@@ -305,7 +359,9 @@ export class PremiumSceneRenderer {
     this.camera.top = height / 2;
     this.camera.bottom = -height / 2;
     this.camera.updateProjectionMatrix();
-    this.composer?.setPixelRatio?.(pixelRatio);
+    this.worldCamera.aspect = width / height;
+    this.worldCamera.updateProjectionMatrix();
+    this.composer?.setPixelRatio?.(pixelRatio * (this.qualityPreset?.renderScale || 1));
     this.composer?.setSize?.(width, height);
   }
 
@@ -319,17 +375,22 @@ export class PremiumSceneRenderer {
     const mode = game.mode || 'endless';
     if (!this.modeWorld || mode !== this.modeId) {
       if (this.modeWorld) {
-        this.scene.remove(this.modeWorld.group);
+        this.worldScene.remove(this.modeWorld.group);
         this.modeWorld.dispose();
       }
       this.modeWorld = createModeWorld(mode);
       this.modeId = this.modeWorld.descriptor.id;
+      this._applyModeLighting(this.modeId);
+      this._createEnvironmentMap(this.modeId);
       this.eventCursor = null;
       this.runId = null;
       this.boardEffects.reset();
+      this.fallingEffects.reset();
       this.pieceMotion = null;
-      this.scene.add(this.modeWorld.group);
-      if (this.backgroundPalette) this.modeWorld.setPalette(this.backgroundPalette.colors, this.backgroundPalette.style);
+      this.worldScene.add(this.modeWorld.group);
+      this.modeWorld.setQuality?.(this.qualityPreset);
+      this.modeWorld.setFiltering?.(this.qualityPreset?.anisotropy || 1);
+      if (this.backgroundPalette) this.modeWorld.setPalette(this.backgroundPalette.colors, this.backgroundPalette.style, this.backgroundPalette.sceneId);
       if (this.ambientParticleColors) this.modeWorld.setAmbientParticles(this.ambientParticleColors, this.ambientParticleShape);
       if (this.clearEffect) this.modeWorld.setClearEffect(this.clearEffect);
     }
@@ -338,20 +399,23 @@ export class PremiumSceneRenderer {
       this.runId = game.runId;
       this.eventCursor = null;
       this.boardEffects.reset();
+      this.fallingEffects.reset();
       this.pieceMotion = null;
     }
 
     const collection = collectGameplayEvents(game, this.eventCursor);
     this.eventCursor = collection.cursor;
-    const dt = Math.min(50, Math.max(0, meta.dt || 16.7));
+    const dt = Math.min(50, Math.max(0, meta.dt ?? 16.7));
 
     const background = this.modeWorld.group.children.find((child) => child.isMesh && child.material?.uniforms?.uTop);
     if (background) {
-      background.scale.set(this._viewportWidth, this._viewportHeight, 1);
+      const distance = this.worldCamera.position.z + 280;
+      const height = 2 * distance * Math.tan(THREE.MathUtils.degToRad(this.worldCamera.fov / 2));
+      background.scale.set(height * this.worldCamera.aspect * 1.02, height * 1.02, 1);
       background.position.set(0, 0, -280);
     }
     this.modeWorld.update({
-      dtMs: dt,
+      dtMs: game.state === 'PLAYING' && !meta.menuOpen && !this.windowRef?.document?.hidden ? dt : 0,
       elapsedMs: this.elapsedMs,
       game,
       events: collection.events,
@@ -360,6 +424,16 @@ export class PremiumSceneRenderer {
       viewportHeight: this._viewportHeight,
     });
     return collection.events;
+  }
+
+  _applyModeLighting(mode) {
+    const art = WORLD_LIGHTING[mode] || WORLD_LIGHTING.endless;
+    this.keyLight.position.set(art.position[0] * 0.45, art.position[1] * 0.5, 650);
+    this.keyLight.color.set(art.key).lerp(new THREE.Color('#ffffff'), 0.65);
+    this.keyLight.intensity = 1.3;
+    this.ambientLight.color.set(art.fill).lerp(new THREE.Color('#e5e9ec'), 0.68);
+    this.ambientLight.groundColor.set(art.ground);
+    this.rimLight.color.set(art.rim).lerp(new THREE.Color('#ffffff'), 0.48);
   }
 
   _ensurePool(name, size) {
@@ -412,6 +486,7 @@ export class PremiumSceneRenderer {
     this.boardBacking.position.set(rect.x, rect.y, -4);
     this.boardBacking.scale.set(width, height, 1);
     this.boardBacking.visible = true;
+    this.boardHousing.update(rect, game.mode, this.settings.glowIntensity);
 
     const positions = [];
     const cellWidth = width / cols;
@@ -478,7 +553,7 @@ export class PremiumSceneRenderer {
       };
     }
     const current = this.pieceMotion;
-    current.age = Math.min(current.life, current.age + Math.max(0, dt || 16.7));
+    current.age = Math.min(current.life, current.age + Math.max(0, dt ?? 16.7));
     current.rotation = piece.rotation;
     current.row = piece.row;
     const t = Math.min(1, current.age / current.life);
@@ -501,6 +576,14 @@ export class PremiumSceneRenderer {
 
   _placePreviewBlocks(name, types, canvas, pieceColors, opacity = 1) {
     const rect = this._worldRect(canvas);
+    const backdrop = this.previewBackdrops?.[name];
+    if (backdrop) {
+      backdrop.visible = !!(rect && types.length);
+      if (backdrop.visible) {
+        backdrop.position.set(rect.x, rect.y, 1);
+        backdrop.scale.set(rect.width, rect.height, 1);
+      }
+    }
     if (!rect || !types.length) {
       this.meshPools[name].forEach((mesh) => { mesh.visible = false; });
       return;
@@ -552,7 +635,9 @@ export class PremiumSceneRenderer {
 
   render(game, meta = {}, pieceColors = {}) {
     if (this.disposed || !this.available || !this.renderer || !game?.board) return;
-    if (meta.dt) this.elapsedMs += meta.dt;
+    const visualDt = game.state === 'PLAYING' && !meta.menuOpen && !this.windowRef?.document?.hidden
+      ? meta.dt || 0 : 0;
+    this.elapsedMs += visualDt;
     if (this._viewportWidth !== (this.windowRef?.innerWidth || this._viewportWidth)
       || this._viewportHeight !== (this.windowRef?.innerHeight || this._viewportHeight)
       || this._pixelRatio !== (this.windowRef?.devicePixelRatio || this._pixelRatio)) this.resize();
@@ -562,18 +647,25 @@ export class PremiumSceneRenderer {
     const boardRect = this._positionBoard(game);
     if (!boardRect) return;
     this.gridMaterial.color.set(this.boardTheme.gridColor || '#78d2ff');
-    this.gridMaterial.opacity = this.settings.glowIntensity > 0 ? (this.boardTheme.gridAlpha || 0.1) : 0.035;
+    this.gridMaterial.opacity = this.settings.glowIntensity > 0 ? (this.boardTheme.gridAlpha || 0.1) * 0.65 : 0.035;
     this._applyBoardTheme();
 
-    const events = this._updateModeWorld(game, meta);
+    const events = this._updateModeWorld(game, { ...meta, dt: visualDt });
+    this.blockAppearance.update({ timeMs: this.elapsedMs, dtMs: visualDt,
+      reducedMotion: this.settings.reducedMotion || visualDt <= 0,
+      locked: events.some(({ type }) => type === 'lock'),
+      cleared: events.some(({ type }) => type === 'clear') });
     this.boardEffects.update(game, events, boardRect, this.settings, this.shapes,
-      this.pieceColors, this.clearEffect?.flashColor || '#85eaff', meta.dt);
+      this.pieceColors, this.clearEffect?.flashColor || '#85eaff', visualDt);
+    if (meta.menuOpen || game.state === 'GAME_OVER') this.fallingEffects.reset();
+    else this.fallingEffects.update({ game, events, boardRect, settings: this.settings,
+      dtMs: visualDt, colors: this.pieceColors, shapes: this.shapes });
     this._clearingRows = game.clearingRows ? new Set(game.clearingRows) : null;
     this._clearProgress = Math.min(1, (game.clearTimer || 0) / 220);
 
     const boardBlocks = this._buildBoardBlocks(game);
     this._placeBlocks('board', boardBlocks, boardRect, game.board.cols, game.board.rows, this.pieceColors, 0, 1);
-    const activeBlocks = this._buildPieceBlocks(game.activePiece, meta.dt);
+    const activeBlocks = this._buildPieceBlocks(game.activePiece, visualDt);
     this._placeBlocks('active', activeBlocks, boardRect, game.board.cols, game.board.rows, this.pieceColors, 8, 1);
     const ghostBlocks = this._buildGhostBlocks(game);
     this._placeBlocks('ghost', ghostBlocks, boardRect, game.board.cols, game.board.rows, this.pieceColors, 4, 0.25);
@@ -583,16 +675,31 @@ export class PremiumSceneRenderer {
     const holdTypes = game.holdType ? [game.holdType] : [];
     this._placePreviewBlocks('hold', holdTypes, this.holdCanvas, this.pieceColors, game.canHold ? 0.96 : 0.38);
 
-    this.rimLight.color.set(this.boardTheme.gridColor || '#4dd8ff');
-    this.rimLight.intensity = this.settings.glowIntensity * (this.settings.reducedMotion ? 0.45 : 0.8);
+    this.rimLight.intensity = 0.22 + Math.min(0.4, this.settings.glowIntensity * (this.settings.reducedMotion ? 0.12 : 0.24));
     this._applyBloomSettings();
-    if (this.composer) this.composer.render();
-    else this.renderer.render(this.scene, this.camera);
+    if (this.composer) {
+      if (this.settings.background3D) this.composer.render();
+      else this.renderer.clear();
+      this.renderer.clearDepth();
+      const oldAutoClear = this.renderer.autoClear;
+      this.renderer.autoClear = false;
+      this.renderer.render(this.scene, this.camera);
+      this.renderer.autoClear = oldAutoClear;
+    } else if (this.renderer.isWebGLRenderer) {
+      if (this.settings.background3D) this.renderer.render(this.worldScene, this.worldCamera);
+      else this.renderer.clear();
+      this.renderer.clearDepth();
+      const oldAutoClear = this.renderer.autoClear;
+      this.renderer.autoClear = false;
+      this.renderer.render(this.scene, this.camera);
+      this.renderer.autoClear = oldAutoClear;
+    } else this.renderer.render(this.scene, this.camera);
   }
 
   setBlockMaterial(data = {}) {
     this.blockMaterial = {
       ...this.blockMaterial,
+      family: data.family || this.blockMaterial.family,
       roughness: clamp(data.roughness, 0.04, 1, this.blockMaterial.roughness),
       metalness: clamp(data.metalness, 0, 1, this.blockMaterial.metalness),
       clearcoat: clamp(data.clearcoat, 0, 1, this.blockMaterial.clearcoat),
@@ -600,16 +707,16 @@ export class PremiumSceneRenderer {
       emissiveAccent: data.emissiveAccent || null,
     };
     this.materials.forEach((material) => {
-      material.roughness = this.blockMaterial.roughness;
-      material.metalness = this.blockMaterial.metalness;
-      material.clearcoat = this.blockMaterial.clearcoat;
+      this.blockAppearance.apply(material, this.blockMaterial);
       material.emissiveIntensity = this.blockMaterial.emissiveIntensity * this.settings.glowIntensity;
     });
     [this.ghostMaterials, this.dimMaterials].forEach((variants) => variants.forEach((material) => {
-      material.roughness = this.blockMaterial.roughness;
-      material.metalness = this.blockMaterial.metalness;
-      material.clearcoat = this.blockMaterial.clearcoat;
+      this.blockAppearance.apply(material, this.blockMaterial, { ghost: true });
     }));
+  }
+
+  setFallingEffect(effectId = 'none') {
+    this.fallingEffects.setEffect(effectId);
   }
 
   setSettings(settings = {}) {
@@ -625,6 +732,7 @@ export class PremiumSceneRenderer {
     this.ghostMaterials.forEach((material) => { material.emissiveIntensity = 0.08 * this.settings.glowIntensity; });
     this.dimMaterials.forEach((material) => { material.emissiveIntensity = 0.06 * this.settings.glowIntensity; });
     this.ambientLight.intensity = this.settings.reducedMotion ? 0.8 : 1.2;
+    this._applyGraphicsQuality();
     this._applyBloomSettings();
   }
 
@@ -645,9 +753,9 @@ export class PremiumSceneRenderer {
     this.modeWorld?.setAmbientParticles(this.ambientParticleColors, this.ambientParticleShape);
   }
 
-  setBackgroundPalette(colors, style) {
-    this.backgroundPalette = { colors, style };
-    this.modeWorld?.setPalette(colors, style);
+  setBackgroundPalette(colors, style, sceneId = null) {
+    this.backgroundPalette = { colors, style, sceneId };
+    this.modeWorld?.setPalette(colors, style, sceneId);
   }
 
   setClearEffect(effect = {}) {
@@ -657,7 +765,7 @@ export class PremiumSceneRenderer {
 
   _applyBloomSettings() {
     if (!this.bloomPass) return;
-    const enabled = this.settings.glowIntensity > 0 && !this.settings.reducedMotion;
+    const enabled = this.qualityPreset?.bloom && this.settings.glowIntensity > 0 && !this.settings.reducedMotion;
     this.bloomPass.enabled = enabled;
     this.bloomPass.strength = enabled ? 0.24 * this.settings.glowIntensity : 0;
   }
@@ -668,17 +776,24 @@ export class PremiumSceneRenderer {
     this.canvas?.removeEventListener?.('webglcontextlost', this._onContextLost, false);
     this.canvas?.removeEventListener?.('webglcontextrestored', this._onContextRestored, false);
     if (this.modeWorld) {
-      this.scene.remove(this.modeWorld.group);
+      this.worldScene.remove(this.modeWorld.group);
       this.modeWorld.dispose();
       this.modeWorld = null;
     }
     this.composer?.dispose?.();
     this.bloomPass?.dispose?.();
+    this.aoPass?.dispose?.();
+    this.environmentTarget?.dispose?.();
     this.boardEffects.dispose();
+    this.fallingEffects.dispose();
+    this.boardHousing.dispose();
     this.gridLines.geometry.dispose();
     this.boardBorder.geometry.dispose();
     this.boardBacking.geometry.dispose();
+    this.previewBackdropGeometry.dispose();
+    this.previewBackdropMaterial.dispose();
     this.blockGeometry.dispose();
+    this.blockAppearance.dispose();
     this.panelMaterial.dispose();
     this.gridMaterial.dispose();
     this.borderMaterial.dispose();

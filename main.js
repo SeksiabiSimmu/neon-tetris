@@ -112,6 +112,7 @@ TETRIS.boot = function boot(PremiumSceneRendererClass) {
         document.getElementById('pause-overlay').classList.add('visible');
         document.getElementById('resume-button').focus({ preventScroll: true });
       } else if (state === TETRIS.GameState.GAME_OVER) {
+        document.getElementById('pause-overlay').classList.remove('visible');
         audio.play('gameOver');
         progression.update(0, game);
         progression.save();
@@ -166,6 +167,9 @@ TETRIS.boot = function boot(PremiumSceneRendererClass) {
 
   let lastTime = performance.now();
   let fps = 60;
+  const recentFrames = [];
+  let frameP95 = 0;
+  let framesUntilPacingSample = 30;
 
   function loop(now) {
     const elapsed = now - lastTime;
@@ -195,9 +199,19 @@ TETRIS.boot = function boot(PremiumSceneRendererClass) {
     if (elapsed > 0 && elapsed < 250) {
       // Light smoothing so the debug readout doesn't flicker every frame.
       fps = fps * 0.9 + (1000 / elapsed) * 0.1;
+      recentFrames.push(elapsed);
+      if (recentFrames.length > 120) recentFrames.shift();
+      if (--framesUntilPacingSample <= 0) {
+        const ordered = [...recentFrames].sort((a, b) => a - b);
+        frameP95 = ordered[Math.floor((ordered.length - 1) * 0.95)] || 0;
+        framesUntilPacingSample = 30;
+      }
     }
 
-    renderer.render(game, { fps, dt, progression });
+    if (uiShell.currentScreen !== 'customization') {
+      renderer.render(game, { fps, frameP95, dt, menuOpen, progression });
+    }
+    uiShell.updateCustomizationPreview(dt);
     uiShell.updateHud();
     requestAnimationFrame(loop);
   }

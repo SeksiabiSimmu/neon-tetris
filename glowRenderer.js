@@ -44,11 +44,8 @@ TETRIS.GlowRenderer = class GlowRenderer {
     ctx.restore();
   }
 
-  // The full layered "material" for one tetromino cell: outer bloom, a
-  // glossy multi-stop gradient fill, an inner specular highlight, and a
-  // crisp glowing rim — instead of one flat fillRect. `intensity` scales
-  // the glow (locked blocks get a gentle version; the active piece and
-  // effects can push it brighter).
+  // A restrained material shared by board, hold, and next in the Canvas
+  // fallback. The narrow seam and directional edge keep cells distinct.
   drawBlock(ctx, x, y, size, color, { intensity = 1, chromatic = false, highlightPhase = 0 } = {}) {
     const pad = 1.5;
     const V = TETRIS.VISUAL;
@@ -60,33 +57,32 @@ TETRIS.GlowRenderer = class GlowRenderer {
 
     // Outer bloom: a soft blurred halo behind the block.
     if (intensity > 0) {
-      ctx.shadowColor = this.rgba(color, Math.min(0.9, 0.55 * intensity));
-      ctx.shadowBlur = V.BLOCK_GLOW_BLUR * intensity * this.intensityScale;
+      ctx.shadowColor = this.rgba(color, Math.min(0.5, 0.28 * intensity));
+      ctx.shadowBlur = V.BLOCK_GLOW_BLUR * intensity * this.intensityScale * 0.55;
     }
 
     // Optional chromatic fringe: two faint offset copies of the glow in
     // complementary hues, blended additively, for a subtle holographic
     // fringe on the boldest blocks (kept small so it reads as texture,
     // not a smeared double-image).
-    if (chromatic && intensity > 0 && this.intensityScale > 0) {
+    if (chromatic && intensity > 1.2 && this.intensityScale > 0) {
       ctx.save();
       ctx.globalCompositeOperation = 'lighter';
-      ctx.globalAlpha = 0.22 * intensity;
+      ctx.globalAlpha = 0.1 * intensity;
       ctx.fillStyle = 'rgba(80,200,255,1)';
       ctx.fillRect(x + pad - V.CHROMATIC_FRINGE_PX, y + pad, size - pad * 2, size - pad * 2);
       ctx.fillStyle = 'rgba(255,70,140,1)';
       ctx.fillRect(x + pad + V.CHROMATIC_FRINGE_PX, y + pad, size - pad * 2, size - pad * 2);
       ctx.restore();
-      ctx.shadowColor = this.rgba(color, Math.min(0.9, 0.55 * intensity));
-      ctx.shadowBlur = V.BLOCK_GLOW_BLUR * intensity;
+      ctx.shadowColor = this.rgba(color, Math.min(0.5, 0.28 * intensity));
+      ctx.shadowBlur = V.BLOCK_GLOW_BLUR * intensity * 0.55;
     }
 
-    // Glossy fill: dark corner -> base color -> bright corner.
+    // Soft directional shade, preserving the original color and silhouette.
     const grad = ctx.createLinearGradient(x + size * 0.12, y, x + size * 0.88, y + size);
-    grad.addColorStop(0, this.shade(color, 42));
-    grad.addColorStop(0.34, this.shade(color, 12));
-    grad.addColorStop(0.68, color);
-    grad.addColorStop(1, this.shade(color, -38));
+    grad.addColorStop(0, this.shade(color, 22));
+    grad.addColorStop(0.55, color);
+    grad.addColorStop(1, this.shade(color, -28));
     ctx.fillStyle = grad;
     ctx.fillRect(innerX, innerY, innerSize, innerSize);
 
@@ -105,7 +101,7 @@ TETRIS.GlowRenderer = class GlowRenderer {
     ctx.lineTo(innerX + innerSize * 0.34, innerY + innerSize * 0.34);
     ctx.lineTo(innerX, innerY + innerSize * 0.52);
     ctx.closePath();
-    ctx.fillStyle = 'rgba(255,255,255,0.075)';
+    ctx.fillStyle = 'rgba(255,255,255,0.04)';
     ctx.fill();
 
     // Moving specular glint is reserved for the active piece. The renderer
@@ -115,7 +111,7 @@ TETRIS.GlowRenderer = class GlowRenderer {
       const glintX = innerX + innerSize * (sweep * 1.45 - 0.2);
       const glint = ctx.createLinearGradient(glintX - 3, innerY, glintX + 3, innerY + innerSize);
       glint.addColorStop(0, 'rgba(255,255,255,0)');
-      glint.addColorStop(0.5, 'rgba(255,255,255,0.2)');
+      glint.addColorStop(0.5, 'rgba(255,255,255,0.08)');
       glint.addColorStop(1, 'rgba(255,255,255,0)');
       ctx.fillStyle = glint;
       ctx.fillRect(innerX, innerY, innerSize, innerSize);
@@ -125,7 +121,7 @@ TETRIS.GlowRenderer = class GlowRenderer {
     // Inner specular highlight: a small bright patch near the top-left,
     // like light catching a glass/gem facet.
     ctx.save();
-    ctx.globalAlpha = TETRIS.VISUAL.BLOCK_INNER_HIGHLIGHT_ALPHA;
+    ctx.globalAlpha = TETRIS.VISUAL.BLOCK_INNER_HIGHLIGHT_ALPHA * 0.45;
     const hl = ctx.createRadialGradient(
       x + size * 0.32, y + size * 0.3, 0,
       x + size * 0.32, y + size * 0.3, size * 0.5
@@ -140,7 +136,7 @@ TETRIS.GlowRenderer = class GlowRenderer {
     // a consistent light direction, including in the small previews.
     ctx.lineCap = 'square';
     ctx.lineWidth = 1;
-    ctx.strokeStyle = 'rgba(255,255,255,0.38)';
+    ctx.strokeStyle = 'rgba(255,255,255,0.24)';
     ctx.beginPath();
     ctx.moveTo(innerX + 1, innerY + 1);
     ctx.lineTo(innerX + innerSize - 1, innerY + 1);

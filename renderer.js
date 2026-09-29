@@ -64,6 +64,11 @@ TETRIS.Renderer = class Renderer {
     this.webgl?.setBlockMaterial(data);
   }
 
+  setFallingEffect(effectId = 'none') {
+    this.fallingEffectId = effectId;
+    this.webgl?.setFallingEffect(effectId);
+  }
+
   setBoardTheme(theme) {
     Object.assign(this.boardTheme, theme);
     this.webgl?.setBoardTheme(theme);
@@ -79,9 +84,9 @@ TETRIS.Renderer = class Renderer {
     this.webgl?.setAmbientParticles(colors, shape);
   }
 
-  setBackgroundPalette(colors, style) {
+  setBackgroundPalette(colors, style, sceneId = null) {
     if (this.background) this.background.setPalette(colors, style);
-    this.webgl?.setBackgroundPalette(colors, style);
+    this.webgl?.setBackgroundPalette(colors, style, sceneId);
   }
 
   setClearEffect(effect) {
@@ -106,7 +111,7 @@ TETRIS.Renderer = class Renderer {
     this.drawNext(game.pieceQueue.peek(TETRIS.CONFIG.NEXT_COUNT));
     this.drawHold(game.holdType, game.canHold);
     this.ui.update(dt, game);
-    this.updateDebugPanel(game, meta.fps || 0, meta.progression || null);
+    this.updateDebugPanel(game, meta.fps || 0, meta.progression || null, meta.frameP95 || 0);
 
     if (this.webgl) {
       try {
@@ -302,7 +307,7 @@ TETRIS.Renderer = class Renderer {
 
   // --- debug overlay (off by default; backtick toggles it) --------------
 
-  updateDebugPanel(game, fps, progression) {
+  updateDebugPanel(game, fps, progression, frameP95 = 0) {
     const panel = this.dom.debugPanel;
     if (!panel) return;
     if (!game.debugMode) {
@@ -319,7 +324,7 @@ TETRIS.Renderer = class Renderer {
       : 'Last: —';
 
     const lines = [
-      `FPS: ${Math.round(fps)}`,
+      `FPS: ${Math.round(fps)}  Frame p95: ${frameP95.toFixed(1)}ms`,
       `State: ${game.state}${game.clearingRows ? ' (clearing)' : ''}`,
       `Level: ${s.level}  Gravity: ${s.gravityInterval}ms`,
       `DAS: ${TETRIS.CONFIG.DAS_MS}ms  ARR: ${TETRIS.CONFIG.ARR_MS}ms`,

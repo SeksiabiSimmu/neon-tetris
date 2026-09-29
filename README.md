@@ -8,7 +8,7 @@ For code ownership and dependency boundaries, see [the architecture map](docs/ar
 
 ## Play on Windows
 
-Download `NeonTetris-1.1.0-win-x64.exe` from the [latest GitHub release](https://github.com/SeksiabiSimmu/neon-tetris/releases/latest) and run it. This is a portable Windows x64 application; it does not need an installer. Progress and settings are saved for the current Windows user. An unsigned build may show a Windows reputation prompt.
+Download the portable Windows x64 executable from the [latest GitHub release](https://github.com/SeksiabiSimmu/neon-tetris/releases/latest) and run it. It does not need an installer. Progress and settings are saved for the current Windows user. An unsigned build may show a Windows reputation prompt.
 
 ## Run from source
 
@@ -20,6 +20,12 @@ pnpm dev
 ```
 
 Open the local URL printed by Vite. To create a production browser build, run `pnpm build`. To run that build in Electron, run `pnpm desktop`. On Windows, `pnpm build:win` creates the portable executable in `release/`.
+
+The same scripts work with npm (`npm install`, `npm run dev`, `npm run build`).
+
+## Customization
+
+Choose a block theme, falling effect, and background independently from **Customization**. The live inspector combines temporary selections and can demonstrate falling, soft drop, hard drop, landing, and line clear. Locked items can be previewed; only earned items can be equipped. The full list of items and exact unlock requirements is in the [customization catalog](docs/customization-catalog.md).
 
 ## Controls
 
